@@ -1,0 +1,36 @@
+name:               concraft
+version:            0.1.0
+synopsis:           Constrained conditional random fields for morphosyntactic tagging
+description:
+    TODO
+license:            BSD3
+license-file:       LICENSE
+cabal-version:      >= 1.6
+copyright:          Copyright (c) 2011 Jakub Waszczuk, 2012 IPI PAN
+author:             Jakub Waszczuk
+maintainer:         waszczuk.kuba@gmail.com
+stability:          experimental
+category:           Natural Language Processing
+homepage:           https://github.com/kawu/concraft
+build-type:         Simple
+
+library
+    build-depends:
+        base >= 4 && < 5
+      , containers
+      , text
+      , crf-chain1-constrained >= 0.1 && < 0.2
+
+    exposed-modules:
+        NLP.Concraft.Morphosyntax
+
+    ghc-options: -Wall -O2
+
+source-repository head
+    type: git
+    location: git://github.com/kawu/concraft.git
+
+-- executable concraft
+--   hs-source-dirs: ., tools
+--   main-is: concraft.hs
+--   ghc-options: -Wall -O2 -threaded
