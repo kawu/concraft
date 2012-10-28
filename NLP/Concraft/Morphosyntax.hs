@@ -1,4 +1,4 @@
-module NLP.Concraft.Morphosyntax.Base
+module NLP.Concraft.Morphosyntax
 ( Word (..)
 , Interp (..)
 , Choice

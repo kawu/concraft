@@ -23,7 +23,6 @@ library
 
     exposed-modules:
         NLP.Concraft.Morphosyntax.Base
-      , NLP.Concraft.Morphosyntax.Compare
 
     ghc-options: -Wall -O2
 
