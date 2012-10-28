@@ -19,10 +19,13 @@ library
         base >= 4 && < 5
       , containers
       , text
+      , vector
       , crf-chain1-constrained >= 0.1 && < 0.2
+      , monad-ox >= 0.2 && < 0.3
 
     exposed-modules:
-        NLP.Concraft.Morphosyntax.Base
+        NLP.Concraft.Morphosyntax
+      , NLP.Concraft.Guess
 
     ghc-options: -Wall -O2
 
