@@ -22,7 +22,8 @@ library
       , crf-chain1-constrained >= 0.1 && < 0.2
 
     exposed-modules:
-        NLP.Concraft.Morphosyntax
+        NLP.Concraft.Morphosyntax.Base
+      , NLP.Concraft.Morphosyntax.Compare
 
     ghc-options: -Wall -O2
 
