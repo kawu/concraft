@@ -6,6 +6,8 @@ module NLP.Concraft.Guess
 , Ob
 , schema
 , schematize
+, Guesser
+, guess
 ) where
 
 import Control.Applicative (pure, (<$>), (<*>))
@@ -51,7 +53,7 @@ schema sent = \k -> do
     x <> y      = T.append <$> x <*> y
 
 -- | Schematize the input sentence with according to 'schema' rules.
-schematize :: Ord t => [Word t] -> [CRF.Word Ob t]
+schematize :: Ord t => Sent t -> CRF.Sent Ob t
 schematize sent =
     [ CRF.Word (obs i) (lbs i)
     | i <- [0 .. n - 1] ]
@@ -60,3 +62,11 @@ schematize sent =
     n = V.length v
     obs = S.fromList . Ox.execOx . schema v
     lbs = S.fromList . map tag . S.toList . interps . (v V.!)
+
+-- | A guesser represented by the conditional random field.
+type Guesser t = CRF.CRF Ob t
+
+-- | Determine the 'k' most probable labels for each unknown word
+-- in the sentence.
+guess :: Ord t => Int -> Guesser t -> Sent t -> [[t]]
+guess k crf sent = CRF.tagK k crf (schematize sent)

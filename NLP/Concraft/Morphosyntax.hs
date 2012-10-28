@@ -1,5 +1,6 @@
 module NLP.Concraft.Morphosyntax
 ( Word (..)
+, Sent
 , Interp (..)
 , Choice
 , Positive (unPositive)
@@ -21,6 +22,9 @@ data Word t = Word {
     -- | Set of word interpretations.
     , interps   :: S.Set (Interp t) }
     deriving (Show, Read, Eq, Ord)
+
+-- | A sentence of 'Word's.
+type Sent t = [Word t]
 
 -- | A potential interpretation of the word.
 data Interp t = Interp {
