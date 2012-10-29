@@ -7,7 +7,7 @@ module NLP.Concraft.Guess
 , Ob
 , schema
 , schematize
-, Guesser
+, Guesser (..)
 , guess
 , tagFile
 , learn

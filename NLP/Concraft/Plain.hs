@@ -144,7 +144,7 @@ parseSpace :: L.Text -> Space
 parseSpace "none"    = None
 parseSpace "space"   = Space
 parseSpace "newline" = NewLine
-parseSpace "newlines" = NewLine -- ^ TODO: Remove this temporary fix
+parseSpace "newlines" = NewLine -- TODO: Remove this temporary fix
 parseSpace xs        = error ("parseSpace: " ++ L.unpack xs)
 
 -- | Printing.
