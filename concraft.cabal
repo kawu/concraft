@@ -2,7 +2,7 @@ name:               concraft
 version:            0.1.0
 synopsis:           Constrained conditional random fields for morphosyntactic tagging
 description:
-    TODO
+    Constrained conditional random fields for morphosyntactic tagging
 license:            BSD3
 license-file:       LICENSE
 cabal-version:      >= 1.6
@@ -18,7 +18,9 @@ library
     build-depends:
         base >= 4 && < 5
       , containers
+      , binary
       , text
+      , text-binary >= 0.1 && < 0.2
       , vector
       , crf-chain1-constrained >= 0.1 && < 0.2
       , monad-ox >= 0.2 && < 0.3
@@ -35,7 +37,9 @@ source-repository head
     type: git
     location: git://github.com/kawu/concraft.git
 
--- executable concraft
---   hs-source-dirs: ., tools
---   main-is: concraft.hs
---   ghc-options: -Wall -O2 -threaded
+executable concraft-guess
+    build-depends:
+        cmdargs
+    hs-source-dirs: ., tools
+    main-is: concraft-guess.hs    
+    ghc-options: -Wall -O2 -threaded

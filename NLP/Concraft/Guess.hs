@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module NLP.Concraft.Guess
 ( Ox
@@ -18,6 +19,9 @@ import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
 import qualified Data.Vector as V
+
+import Data.Binary (Binary, get, put)
+import Data.Text.Binary ()
 
 import qualified Control.Monad.Ox as Ox
 import qualified Control.Monad.Ox.Text as Ox
@@ -74,6 +78,10 @@ data Guesser t = Guesser
     { crf   :: CRF.CRF Ob t -- ^ The CRF model
     , ign   :: t            -- ^ The tag indicating unkown words
     }
+
+instance (Ord t, Binary t) => Binary (Guesser t) where
+    put Guesser{..} = put crf >> put ign
+    get = Guesser <$> get <*> get
 
 -- | Determine the 'k' most probable labels for each unknown word
 -- in the sentence.
