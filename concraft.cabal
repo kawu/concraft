@@ -1,8 +1,9 @@
 name:               concraft
 version:            0.1.0
-synopsis:           Constrained conditional random fields for morphosyntactic tagging
+synopsis:           Morphosyntactic tagging tool based on constrained CRFs
 description:
-    Constrained conditional random fields for morphosyntactic tagging
+    A morphosyntactic tagging tool based on constrained conditional
+    random fields.
 license:            BSD3
 license-file:       LICENSE
 cabal-version:      >= 1.6
@@ -22,7 +23,7 @@ library
       , text
       , text-binary >= 0.1 && < 0.2
       , vector
-      , crf-chain1-constrained >= 0.1 && < 0.2
+      , crf-chain1-constrained >= 0.1.1 && < 0.2
       , monad-ox >= 0.2 && < 0.3
       , sgd >= 0.2.2 && < 0.3
 
