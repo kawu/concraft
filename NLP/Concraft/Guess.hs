@@ -61,7 +61,7 @@ schematize sent =
     v = V.fromList sent
     n = V.length v
     obs = S.fromList . Ox.execOx . schema v
-    lbs = S.fromList . map tag . S.toList . interps . (v V.!)
+    lbs = tags . (v V.!)
 
 -- | A guesser represented by the conditional random field.
 type Guesser t = CRF.CRF Ob t

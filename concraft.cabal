@@ -26,6 +26,7 @@ library
     exposed-modules:
         NLP.Concraft.Morphosyntax
       , NLP.Concraft.Guess
+      , NLP.Concraft.Plain
 
     ghc-options: -Wall -O2
 
