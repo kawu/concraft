@@ -16,6 +16,8 @@ module NLP.Concraft.Plain
 -- * Interface
 , fromTok
 , choose
+, addInterps
+, addNones
 
 -- * Parsing
 , readPlain
@@ -85,6 +87,16 @@ choose tok choice =
     mark ip 
         | tag ip `S.member` choice  = (ip, True) 
         | otherwise                 = (ip, False)
+
+-- | Add new interpretations with given disamb annotation.
+addInterps :: Bool -> Token -> [Interp] -> Token
+addInterps dmb tok xs =
+    let newIps = M.fromList [(x, dmb) | x <- xs]
+    in  tok { interps = M.unionWith max newIps (interps tok) }
+
+-- | Add new interpretations with "None" base and given disamb annotation.
+addNones :: Bool -> Token -> [T.Text] -> Token
+addNones dmb tok = addInterps dmb tok . map (Interp "None")
 
 readPlain :: T.Text -> FilePath -> IO [[Token]]
 readPlain ign = fmap (parsePlain ign) . L.readFile
