@@ -38,7 +38,6 @@ import qualified Control.Monad.Ox as Ox
 import qualified Data.CRF.Chain2.Pair as CRF
 import qualified Numeric.SGD as SGD
 import qualified Data.Tagset.Positional as TP
-import qualified Text.Tagset.Positional as TP
 
 import NLP.Concraft.Morphosyntax
 import qualified NLP.Concraft.Plain as P
@@ -122,11 +121,6 @@ data Disamb = Disamb
 instance Binary Disamb where
     put Disamb{..} = put crf >> put tagset >> put tierConf
     get = Disamb <$> get <*> get <*> get
-
--- | FIXME: Move the instance to tagset-positional module.
-instance Binary TP.Tagset where
-    put TP.Tagset{..} = put domains >> put rules
-    get = TP.Tagset <$> get <*> get
 
 -- | Determine the most probable label sequence.
 disamb :: Disamb -> Sent TP.Tag -> [TP.Tag]
