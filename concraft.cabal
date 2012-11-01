@@ -47,3 +47,10 @@ executable concraft-guess
     hs-source-dirs: ., tools
     main-is: concraft-guess.hs    
     ghc-options: -Wall -O2 -threaded
+
+executable concraft-disamb
+    build-depends:
+        cmdargs
+    hs-source-dirs: ., tools
+    main-is: concraft-disamb.hs    
+    ghc-options: -Wall -O2 -threaded
