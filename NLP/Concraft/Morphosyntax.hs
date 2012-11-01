@@ -1,7 +1,11 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module NLP.Concraft.Morphosyntax
 ( Word (..)
+, mapWord
 , Sent
 , Choice
+, mapChoice
 , Positive (unPositive)
 , (<+>)
 , mkPositive
@@ -9,6 +13,7 @@ module NLP.Concraft.Morphosyntax
 , known
 ) where
 
+import Control.Arrow (first)
 import Data.Ord (comparing)
 import Data.List (maximumBy)
 import qualified Data.Set as S
@@ -22,6 +27,11 @@ data Word t = Word {
     -- | Set of word interpretations.
     , tags  :: S.Set t }
     deriving (Show, Read, Eq, Ord)
+
+mapWord :: Ord b => (a -> b) -> Word a -> Word b
+mapWord f Word{..} = Word
+    { orth = orth
+    , tags = S.fromList . map f . S.toList $ tags }
 
 -- | A sentence of 'Word's.
 type Sent t = [Word t]
@@ -37,6 +47,9 @@ newtype Positive a = Positive { unPositive :: a }
 (<+>) :: Num a => Positive a -> Positive a -> Positive a
 Positive x <+> Positive y = Positive (x + y)
 {-# INLINE (<+>) #-}
+
+mapChoice :: Ord b => (a -> b) -> Choice a -> Choice b
+mapChoice f = M.fromListWith (<+>) . map (first f) . M.toList
 
 mkPositive :: (Num a, Ord a) => a -> Positive a
 mkPositive x

@@ -1,5 +1,5 @@
 name:               concraft
-version:            0.1.0
+version:            0.2.0
 synopsis:           Morphosyntactic tagging tool based on constrained CRFs
 description:
     A morphosyntactic tagging tool based on constrained conditional
@@ -26,11 +26,14 @@ library
       , crf-chain1-constrained >= 0.1.1 && < 0.2
       , monad-ox >= 0.2 && < 0.3
       , sgd >= 0.2.2 && < 0.3
+      , tagset-positional >= 0.1.1 && < 0.2
+      , crf-chain2-generic >= 0.1.1 && < 0.2
 
     exposed-modules:
         NLP.Concraft.Morphosyntax
-      , NLP.Concraft.Guess
       , NLP.Concraft.Plain
+      , NLP.Concraft.Guess
+      , NLP.Concraft.Disamb
 
     ghc-options: -Wall -O2
 
