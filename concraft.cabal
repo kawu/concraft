@@ -27,7 +27,7 @@ library
       , monad-ox >= 0.2 && < 0.3
       , sgd >= 0.2.2 && < 0.3
       , tagset-positional >= 0.2 && < 0.3
-      , crf-chain2-generic >= 0.1.1 && < 0.2
+      , crf-chain2-generic >= 0.2 && < 0.3
 
     exposed-modules:
         NLP.Concraft.Morphosyntax

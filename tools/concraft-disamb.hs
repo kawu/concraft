@@ -29,6 +29,7 @@ data Args
     , evalPath      :: Maybe FilePath
     , tagsetPath    :: FilePath
     , ignTag        :: String
+    , discardHidden :: Bool
     , iterNum       :: Double
     , batchSize     :: Int
     , regVar        :: Double
@@ -47,6 +48,7 @@ learnMode = LearnMode
     , ignTag = def &= argPos 1 &= typ "IGN-TAG"
     , learnPath = def &= argPos 2 &= typ "TRAIN-FILE"
     , evalPath = def &= typFile &= help "Evaluation file"
+    , discardHidden = False &= help "Discard hidden features"
     , iterNum = 10 &= help "Number of SGD iterations"
     , batchSize = 30 &= help "Batch size"
     , regVar = 10.0 &= help "Regularization variance"
@@ -69,7 +71,9 @@ main = exec =<< cmdArgsRun argModes
 exec :: Args -> IO ()
 
 exec LearnMode{..} = do
-    dmb <- learn sgdArgs tagsetPath (T.pack ignTag) tierConf learnPath evalPath
+    let sel = if discardHidden then selectPresent else selectHidden
+    dmb <- learn sgdArgs tagsetPath (T.pack ignTag)
+                 tierConf sel learnPath evalPath
     when (not . null $ outDisamb) $ do
         putStrLn $ "\nSaving model in " ++ outDisamb ++ "..."
         encodeFile outDisamb dmb

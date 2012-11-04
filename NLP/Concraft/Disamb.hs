@@ -20,6 +20,11 @@ module NLP.Concraft.Disamb
 , disamb
 , tagFile
 , learn
+
+-- * Feature selection
+, FeatSel
+, selectPresent
+, selectHidden
 ) where
 
 import Control.Applicative ((<$>), (<*>))
@@ -34,8 +39,8 @@ import qualified Data.Vector as V
 import Data.Binary (Binary, get, put)
 import Data.Text.Binary ()
 
-import qualified Control.Monad.Ox as Ox
 import qualified Data.CRF.Chain2.Pair as CRF
+import qualified Control.Monad.Ox as Ox
 import qualified Numeric.SGD as SGD
 import qualified Data.Tagset.Positional as TP
 
@@ -164,18 +169,29 @@ tagFile ign dmb path =
         parseTag = TP.parseTag (tagset dmb)
         showTag  = TP.showTag (tagset dmb)
 
+type FeatSel = CRF.FeatSel CRF.Ob CRF.Lb CRF.Feat
+
+-- | Present features selection.
+selectPresent :: FeatSel
+selectPresent = CRF.selectPresent
+
+-- | Hidden features selection.
+selectHidden :: FeatSel
+selectHidden = CRF.selectHidden
+
 -- | TODO: Abstract over the format type.
 learn
     :: SGD.SgdArgs      -- ^ SGD parameters 
     -> FilePath         -- ^ File with positional tagset definition
     -> T.Text        	-- ^ The tag indicating unknown words
     -> TierConf         -- ^ Tiered tagging configuration
+    -> FeatSel          -- ^ Feature selection 
     -> FilePath         -- ^ Train file (plain format)
     -> Maybe FilePath   -- ^ Maybe eval file
     -> IO Disamb
-learn sgdArgs tagsetPath ign tierConf trainPath evalPath'Maybe = do
+learn sgdArgs tagsetPath ign tierConf ftSel trainPath evalPath'Maybe = do
     _tagset <- TP.parseTagset tagsetPath <$> readFile tagsetPath
-    _crf <- CRF.train sgdArgs
+    _crf <- CRF.train sgdArgs ftSel
         (schemed _tagset ign tierConf trainPath)
         (schemed _tagset ign tierConf <$> evalPath'Maybe)
     return $ Disamb _crf _tagset tierConf
