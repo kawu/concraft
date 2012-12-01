@@ -20,25 +20,25 @@ type Tag = T.Text
 -- | Words handler.
 data Word w = Word {
     -- | Extract information relevant for tagging.
-      extract   :: w -> M.Word Tag
+      extract       :: w -> M.Word Tag
     -- | Select the set of morphosyntactic interpretations.
-    , select    :: M.Prob Tag -> w -> w }
+    , select        :: M.Prob Tag -> w -> w }
 
 -- | Sentence handler.
 data Sent s w = Sent {
     -- | Split sentence into a list of words.
-      split     :: s -> [w]
+      split         :: s -> [w]
     -- | Merge words with a sentence.
-    , unSplit   :: [w] -> s -> s
+    , unSplit       :: [w] -> s -> s
     -- | Words handler.
-    , word      :: Word w }
+    , wordHandler   :: Word w }
 
 -- | Document format.
 data Format f s w = Format {
     -- | Parse textual interpretations into a functor with
     -- sentence elements.
-      parse     :: L.Text -> f s
+      parse         :: L.Text -> f s
     -- | Show textual reprezentation of a document.
-    , unParse   :: f s -> L.Text
+    , unParse       :: f s -> L.Text
     -- | Sentence handler.
-    , sent      :: Sent s w }
+    , sentHandler   :: Sent s w }

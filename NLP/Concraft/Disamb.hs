@@ -75,11 +75,11 @@ select Tier{..} tag = Tag
     , atts  = M.filterWithKey (\k _ -> k `S.member` withAtts) (TP.atts tag) }
 
 -- | The Ox monad specialized to word token type and text observations.
--- TODO: Move to monad-ox package from here and from the nerf library.
 type Ox t a = Ox.Ox (Word t) T.Text a
 
 -- | A schema is a block of the Ox computation performed within the
 -- context of the sentence and the absolute sentence position.
+-- TODO: Move to monad-ox package from here and from the nerf library.
 type Schema t a = V.Vector (Word t) -> Int -> Ox t a
 
 -- | An observation consist of an index (of list type) and an actual

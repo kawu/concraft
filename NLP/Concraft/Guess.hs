@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module NLP.Concraft.Guess
 ( Ox
@@ -9,35 +10,37 @@ module NLP.Concraft.Guess
 , schematize
 , Guesser (..)
 , guess
-, tagFile
 , train
+, tag
 ) where
 
+import Prelude hiding (words)
 import Control.Applicative (pure, (<$>), (<*>))
+import Data.Binary (Binary)
+import Data.Foldable (Foldable, foldMap)
+import Data.Text.Binary ()
 import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
+import qualified Data.Text.Lazy.IO as L
 import qualified Data.Vector as V
-
-import Data.Binary (Binary, get, put)
-import Data.Text.Binary ()
 
 import qualified Control.Monad.Ox as Ox
 import qualified Control.Monad.Ox.Text as Ox
 import qualified Data.CRF.Chain1.Constrained as CRF
 import qualified Numeric.SGD as SGD
 
-import NLP.Concraft.Morphosyntax
-import qualified NLP.Concraft.Plain as P
+import qualified NLP.Concraft.Morphosyntax as Mx
+import qualified NLP.Concraft.Format as F
 
 -- | The Ox monad specialized to word token type and text observations.
--- TODO: Move to monad-ox package from here and from the nerf library.
-type Ox t a = Ox.Ox (Word t) T.Text a
+type Ox t a = Ox.Ox (Mx.Word t) T.Text a
 
 -- | A schema is a block of the Ox computation performed within the
 -- context of the sentence and the absolute sentence position.
-type Schema t a = V.Vector (Word t) -> Int -> Ox t a
+-- TODO: Move to monad-ox package from here and from the nerf library.
+type Schema t a = V.Vector (Mx.Word t) -> Int -> Ox t a
 
 -- | An observation consist of an index (of list type) and an actual
 -- observation value.
@@ -51,19 +54,19 @@ schema sent = \k -> do
     Ox.save (isBeg k <> pure "-" <> shapeP k)
   where
     at          = Ox.atWith sent
-    lowOrth i   = T.toLower <$> orth `at` i
+    lowOrth i   = T.toLower <$> Mx.orth `at` i
     lowPref i j = Ox.prefix j =<< lowOrth i
     lowSuff i j = Ox.suffix j =<< lowOrth i
-    shape i     = Ox.shape <$> orth `at` i
+    shape i     = Ox.shape <$> Mx.orth `at` i
     shapeP i    = Ox.pack <$> shape i
-    knownAt i   = boolF <$> (not . oov) `at` i
+    knownAt i   = boolF <$> (not . Mx.oov) `at` i
     isBeg i     = (Just . boolF) (i == 0)
     boolF True  = "T"
     boolF False = "F"
     x <> y      = T.append <$> x <*> y
 
 -- | Schematize the input sentence with according to 'schema' rules.
-schematize :: Ord t => Sent t -> CRF.Sent Ob t
+schematize :: Ord t => Mx.Sent t -> CRF.Sent Ob t
 schematize sent =
     [ CRF.Word (obs i) (lbs i)
     | i <- [0 .. n - 1] ]
@@ -71,61 +74,83 @@ schematize sent =
     v = V.fromList sent
     n = V.length v
     obs = S.fromList . Ox.execOx . schema v
-    lbs = tags . (v V.!)
+    -- TODO: Handle OOV case in the CRF library, i.e. share sets
+    -- of potential interpretations to reduce memory footprint.
+    lbs i 
+        | Mx.oov w  = S.empty
+        | otherwise = M.keysSet . Mx.unProb . Mx.tags $ w
+        where w = v V.! i
 
 -- | A guesser represented by the conditional random field.
-data Guesser t = Guesser
-    { crf   :: CRF.CRF Ob t -- ^ The CRF model
-    , ign   :: t            -- ^ The tag indicating unkown words
-    }
+newtype Guesser t = Guesser { crf :: CRF.CRF Ob t }
+    deriving (Binary)
 
-instance (Ord t, Binary t) => Binary (Guesser t) where
-    put Guesser{..} = put crf >> put ign
-    get = Guesser <$> get <*> get
-
--- | Determine the 'k' most probable labels for each unknown word
--- in the sentence.
-guess :: Ord t => Int -> Guesser t -> Sent t -> [[t]]
+-- | Determine the 'k' most probable labels for each word in the sentence.
+guess :: Ord t => Int -> Guesser t -> Mx.Sent t -> [[t]]
 guess k gsr sent = CRF.tagK k (crf gsr) (schematize sent)
-{-# INLINE guess #-}
 
--- | Tag the file.
-tagFile
-    :: Int              -- ^ Guesser argument
-    -> Guesser T.Text   -- ^ Guesser itself
-    -> FilePath         -- ^ File to tag (plain format)
-    -> IO L.Text
-tagFile k gsr path =
-    P.showPlain (ign gsr) . map onSent <$> P.readPlain (ign gsr) path
+-- | Tag sentence in external format.  Selected interpretations
+-- (tags correct within the context) will be preserved.
+tagSent :: F.Sent s w -> Int -> Guesser T.Text -> s -> s
+tagSent F.Sent{..} k gsr sent = flip unSplit sent
+    [ select pr word
+    | (pr, word) <- zip probs (split sent) ]
   where
-    onSent sent =
-        let (xs, _) = unzip (map P.fromTok sent)
-            yss = guess k gsr xs
-        in  [ if P.known tok
-                then tok
-                else P.addNones False tok ys
-            | (tok, ys) <- zip sent yss ]
+    -- Extract word handler.
+    F.Word{..} = wordHandler
+    -- Word in internal format.
+    words   = map extract (split sent)
+    -- Guessed lists of interpretations for individual words.
+    guessed = guess k gsr words
+    -- Resultant probability distributions. 
+    probs   =
+        [ if Mx.oov word
+            then addInterps (Mx.tags word) xs
+            else Mx.tags word
+        | (xs, word) <- zip guessed words ]
+    -- Add new interpretations.
+    addInterps pr xs = Mx.mkProb
+        $  M.toList (Mx.unProb pr)
+        ++ zip xs [0..]
 
--- | TODO: Abstract over the format type.
+-- | Tag file.
+tag
+    :: Functor f
+    => F.Format f s w   -- ^ Format handler
+    -> Int              -- ^ Guesser argument
+    -> Guesser T.Text   -- ^ Guesser itself
+    -> L.Text           -- ^ Input
+    -> L.Text           -- ^ Output
+tag F.Format{..} k gsr
+    = unParse 
+    . fmap (tagSent sentHandler k gsr)
+    . parse
+
+-- | Train guesser.
 train
-    :: SGD.SgdArgs      -- ^ SGD parameters 
-    -> T.Text        	-- ^ The tag indicating unknown words
-    -> FilePath         -- ^ Train file (plain format)
+    :: Foldable f
+    => F.Format f s w
+    -> SGD.SgdArgs      -- ^ SGD parameters 
+    -> FilePath         -- ^ Training file
     -> Maybe FilePath   -- ^ Maybe eval file
     -> IO (Guesser T.Text)
-train sgdArgs _ign trainPath evalPath'Maybe = do
+train format sgdArgs trainPath evalPath'Maybe = do
     _crf <- CRF.train sgdArgs
-        (schemed _ign trainPath)
-        (schemed _ign <$> evalPath'Maybe)
+        (schemed format trainPath)
+        (schemed format <$> evalPath'Maybe)
         (const CRF.presentFeats)
-    return $ Guesser _crf _ign
+    return $ Guesser _crf
 
 -- | Schematized data from the plain file.
-schemed :: T.Text -> FilePath -> IO [CRF.SentL Ob T.Text]
-schemed _ign =
-    fmap (map onSent) . P.readPlain _ign
+schemed
+    :: Foldable t => F.Format t s w
+    -> FilePath -> IO [CRF.SentL Ob T.Text]
+schemed F.Format{..} path =
+    foldMap onSent . parse <$> L.readFile path
   where
+    F.Sent{..} = sentHandler
+    F.Word{..} = wordHandler
     onSent sent =
-        let (xs, ys) = unzip (map P.fromTok sent)
-            mkDist = CRF.mkDist . M.toList . M.map unPositive
-        in  zip (schematize xs) (map mkDist ys)
+        let xs = map extract (split sent)
+            mkDist = CRF.mkDist . M.toList . Mx.unProb . Mx.tags
+        in  [zip (schematize xs) (map mkDist xs)]

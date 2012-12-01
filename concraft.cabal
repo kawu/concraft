@@ -32,8 +32,8 @@ library
     exposed-modules:
         NLP.Concraft.Morphosyntax
       , NLP.Concraft.Format
-      , NLP.Concraft.Plain
---       , NLP.Concraft.Guess
+      , NLP.Concraft.Format.Plain
+      , NLP.Concraft.Guess
 --       , NLP.Concraft.Disamb
 
     ghc-options: -Wall -O2
@@ -42,13 +42,13 @@ source-repository head
     type: git
     location: git://github.com/kawu/concraft.git
 
--- executable concraft-guess
---     build-depends:
---         cmdargs
---     hs-source-dirs: ., tools
---     main-is: concraft-guess.hs    
---     ghc-options: -Wall -O2 -threaded -rtsopts
--- 
+executable concraft-guess
+    build-depends:
+        cmdargs
+    hs-source-dirs: ., tools
+    main-is: concraft-guess.hs    
+    ghc-options: -Wall -O2 -threaded -rtsopts
+
 -- executable concraft-disamb
 --     build-depends:
 --         cmdargs

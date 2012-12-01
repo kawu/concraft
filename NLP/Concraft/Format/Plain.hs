@@ -6,8 +6,8 @@
 -- with no spaces inside and that one of the tags indicates
 -- unknown words.
 
-module NLP.Concraft.Plain
-( plain
+module NLP.Concraft.Format.Plain
+( plainFormat
 -- -- * Types
 -- , Space (..)
 -- , Token (..)
@@ -60,16 +60,16 @@ data Interp = Interp
     deriving (Show, Eq, Ord)
 
 -- | Create document handler given value of the /ignore/ tag.
-plain :: T.Text -> F.Format [] [Token] Token
-plain ign = F.Format (parsePlain ign) (showPlain ign) sent
+plainFormat :: T.Text -> F.Format [] [Token] Token
+plainFormat ign = F.Format (parsePlain ign) (showPlain ign) sentHandler
 
 -- | Sentence handler.
-sent :: F.Sent [Token] Token
-sent = F.Sent id (\xs _ -> xs) word
+sentHandler :: F.Sent [Token] Token
+sentHandler = F.Sent id (\xs _ -> xs) wordHandler
 
 -- | Word handler.
-word :: F.Word Token
-word = F.Word extract select
+wordHandler :: F.Word Token
+wordHandler = F.Word extract select
 
 -- | Extract information relevant for tagging.
 extract :: Token -> Mx.Word T.Text
