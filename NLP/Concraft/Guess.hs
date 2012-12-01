@@ -10,7 +10,7 @@ module NLP.Concraft.Guess
 , Guesser (..)
 , guess
 , tagFile
-, learn
+, train
 ) where
 
 import Control.Applicative (pure, (<$>), (<*>))
@@ -56,7 +56,7 @@ schema sent = \k -> do
     lowSuff i j = Ox.suffix j =<< lowOrth i
     shape i     = Ox.shape <$> orth `at` i
     shapeP i    = Ox.pack <$> shape i
-    knownAt i   = boolF <$> known `at` i
+    knownAt i   = boolF <$> (not . oov) `at` i
     isBeg i     = (Just . boolF) (i == 0)
     boolF True  = "T"
     boolF False = "F"
@@ -107,13 +107,13 @@ tagFile k gsr path =
             | (tok, ys) <- zip sent yss ]
 
 -- | TODO: Abstract over the format type.
-learn
+train
     :: SGD.SgdArgs      -- ^ SGD parameters 
     -> T.Text        	-- ^ The tag indicating unknown words
     -> FilePath         -- ^ Train file (plain format)
     -> Maybe FilePath   -- ^ Maybe eval file
     -> IO (Guesser T.Text)
-learn sgdArgs _ign trainPath evalPath'Maybe = do
+train sgdArgs _ign trainPath evalPath'Maybe = do
     _crf <- CRF.train sgdArgs
         (schemed _ign trainPath)
         (schemed _ign <$> evalPath'Maybe)

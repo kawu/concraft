@@ -7,41 +7,34 @@
 -- unknown words.
 
 module NLP.Concraft.Plain
-(
--- * Types
-  Space (..)
-, Token (..)
-, Interp (..)
-
--- * Interface
-, fromTok
-, choose
-, addInterps
-, addNones
-
--- * Parsing
-, readPlain
-, parsePlain
-, parseSent
-
--- * Showing
-, writePlain
-, showPlain
-, showSent
-, showWord
+( plain
+-- -- * Types
+-- , Space (..)
+-- , Token (..)
+-- , Interp (..)
+-- 
+-- -- * Parsing
+-- , readPlain
+-- , parsePlain
+-- , parseSent
+-- 
+-- -- * Showing
+-- , writePlain
+-- , showPlain
+-- , showSent
+-- , showWord
 ) where
 
 import Data.Monoid (Monoid, mappend, mconcat)
 import Data.Maybe (catMaybes)
 import Data.List (groupBy)
-import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
-import qualified Data.Text.Lazy.IO as L
 import qualified Data.Text.Lazy.Builder as L
 
 import qualified NLP.Concraft.Morphosyntax as Mx
+import qualified NLP.Concraft.Format as F
 
 -- | No space, space or newline.
 data Space
@@ -55,51 +48,71 @@ data Token = Token
     { orth      :: T.Text
     , space     :: Space
     , known     :: Bool
-    -- | Interpretations with disambiguation info.
+    -- | Interpretations of the token, each interpretation annotated
+    -- with a /disamb/ Boolean value (if 'True', the interpretation
+    -- is correct within the context).
     , interps   :: M.Map Interp Bool }
     deriving (Show, Eq, Ord)
     
 data Interp = Interp
-    { base      :: T.Text
+    { _base     :: T.Text
     , tag       :: T.Text }
     deriving (Show, Eq, Ord)
 
+-- | Create document handler given value of the /ignore/ tag.
+plain :: T.Text -> F.Format [] [Token] Token
+plain ign = F.Format (parsePlain ign) (showPlain ign) sent
+
+-- | Sentence handler.
+sent :: F.Sent [Token] Token
+sent = F.Sent id (\xs _ -> xs) word
+
+-- | Word handler.
+word :: F.Word Token
+word = F.Word extract select
+
 -- | Extract information relevant for tagging.
-fromTok :: Token -> (Mx.Word T.Text, Mx.Choice T.Text)
-fromTok tok =
-    (word, choice)
-  where
-    word = Mx.Word
-        { Mx.orth   = orth tok
-        , Mx.tags   = if known tok
-            then S.fromList . map tag . M.keys $ interps tok
-            else S.empty }
-    choice = M.fromListWith (Mx.<+>)
-        [ (tag x, Mx.mkPositive 1)
-        | (x, True) <- M.toList (interps tok) ]
+extract :: Token -> Mx.Word T.Text
+extract tok = Mx.Word
+    { Mx.orth   = orth tok
+    , Mx.tags   = Mx.mkProb
+        [ (tag x, if disamb then 1 else 0)
+        | (x, disamb) <- M.toList (interps tok) ]
+    , Mx.oov    = not (known tok) }
 
--- | Mark all interpretations with tag component beeing a member of
--- the given choice set with disamb annotations.
-choose :: Token -> S.Set T.Text -> Token
-choose tok choice =
-    tok { interps = (M.fromList . map mark . M.keys) (interps tok) }
-  where
-    mark ip 
-        | tag ip `S.member` choice  = (ip, True) 
-        | otherwise                 = (ip, False)
+-- | Select interpretations.
+select :: Mx.Prob T.Text -> Token -> Token
+select pr tok =
+    let xs = M.fromList
+            [ ( Interp "None" tag
+              , if x > 0 then True else False )
+            | (tag, x) <- M.toList (Mx.unProb pr) ]
+    in  tok { interps = xs }
 
--- | Add new interpretations with given disamb annotation.
-addInterps :: Bool -> Token -> [Interp] -> Token
-addInterps dmb tok xs =
-    let newIps = M.fromList [(x, dmb) | x <- xs]
-    in  tok { interps = M.unionWith max newIps (interps tok) }
+-- -- | Add new interpretations with given /disamb/ annotation.
+-- addInterps :: Bool -> Token -> [Interp] -> Token
+-- addInterps dmb tok xs =
+--     let newIps = M.fromList [(x, dmb) | x <- xs]
+--     in  tok { interps = M.unionWith max newIps (interps tok) }
+-- 
+-- -- | Add new interpretations with "None" base form and given
+-- -- /disamb/ annotation.
+-- addNones :: Bool -> Token -> [T.Text] -> Token
+-- addNones dmb tok = addInterps dmb tok . map (Interp "None")
+-- 
+-- -- | Select interpretations with tags belonging to the given set.
+-- -- Interpretations selected in the process (and only those selected)
+-- -- will be marked with 'True' /disamb/ values.
+-- select :: Token -> S.Set T.Text -> Token
+-- select tok choice =
+--     tok { interps = (M.fromList . map mark . M.keys) (interps tok) }
+--   where
+--     mark ip 
+--         | tag ip `S.member` choice  = (ip, True) 
+--         | otherwise                 = (ip, False)
 
--- | Add new interpretations with "None" base and given disamb annotation.
-addNones :: Bool -> Token -> [T.Text] -> Token
-addNones dmb tok = addInterps dmb tok . map (Interp "None")
-
-readPlain :: T.Text -> FilePath -> IO [[Token]]
-readPlain ign = fmap (parsePlain ign) . L.readFile
+-- readPlain :: T.Text -> FilePath -> IO [[Token]]
+-- readPlain ign = fmap (parsePlain ign) . L.readFile
 
 parsePlain :: T.Text -> L.Text -> [[Token]]
 parsePlain ign = map (parseSent ign) . init . L.splitOn "\n\n"
@@ -154,18 +167,18 @@ parseSpace xs        = error ("parseSpace: " ++ L.unpack xs)
 (<>) = mappend
 {-# INLINE (<>) #-}
 
-writePlain :: T.Text -> FilePath -> [[Token]] -> IO ()
-writePlain ign path = L.writeFile path . showPlain ign 
+-- writePlain :: T.Text -> FilePath -> [[Token]] -> IO ()
+-- writePlain ign path = L.writeFile path . showPlain ign 
 
 showPlain :: T.Text -> [[Token]] -> L.Text
 showPlain ign =
     L.toLazyText . mconcat  . map (\xs -> buildSent ign xs <> "\n")
 
-showSent :: T.Text -> [Token] -> L.Text
-showSent ign = L.toLazyText . buildSent ign
-
-showWord :: T.Text -> Token -> L.Text
-showWord ign = L.toLazyText . buildWord ign
+-- showSent :: T.Text -> [Token] -> L.Text
+-- showSent ign = L.toLazyText . buildSent ign
+-- 
+-- showWord :: T.Text -> Token -> L.Text
+-- showWord ign = L.toLazyText . buildWord ign
 
 buildSent :: T.Text -> [Token] -> L.Builder
 buildSent ign = mconcat . map (buildWord ign)

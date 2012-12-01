@@ -1,5 +1,5 @@
 name:               concraft
-version:            0.2.0
+version:            0.3.0
 synopsis:           Morphosyntactic tagging tool based on constrained CRFs
 description:
     A morphosyntactic tagging tool based on constrained conditional
@@ -31,9 +31,10 @@ library
 
     exposed-modules:
         NLP.Concraft.Morphosyntax
+      , NLP.Concraft.Format
       , NLP.Concraft.Plain
-      , NLP.Concraft.Guess
-      , NLP.Concraft.Disamb
+--       , NLP.Concraft.Guess
+--       , NLP.Concraft.Disamb
 
     ghc-options: -Wall -O2
 
@@ -41,16 +42,16 @@ source-repository head
     type: git
     location: git://github.com/kawu/concraft.git
 
-executable concraft-guess
-    build-depends:
-        cmdargs
-    hs-source-dirs: ., tools
-    main-is: concraft-guess.hs    
-    ghc-options: -Wall -O2 -threaded -rtsopts
-
-executable concraft-disamb
-    build-depends:
-        cmdargs
-    hs-source-dirs: ., tools
-    main-is: concraft-disamb.hs    
-    ghc-options: -Wall -O2 -threaded -rtsopts
+-- executable concraft-guess
+--     build-depends:
+--         cmdargs
+--     hs-source-dirs: ., tools
+--     main-is: concraft-guess.hs    
+--     ghc-options: -Wall -O2 -threaded -rtsopts
+-- 
+-- executable concraft-disamb
+--     build-depends:
+--         cmdargs
+--     hs-source-dirs: ., tools
+--     main-is: concraft-disamb.hs    
+--     ghc-options: -Wall -O2 -threaded -rtsopts

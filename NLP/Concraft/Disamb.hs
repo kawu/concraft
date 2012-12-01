@@ -16,10 +16,10 @@ module NLP.Concraft.Disamb
 , tear
 , deTear
 , deTears
-, Disamb
+, Disamb (..)
 , disamb
 , tagFile
-, learn
+, train
 
 -- * Feature selection
 , FeatSel
@@ -27,20 +27,20 @@ module NLP.Concraft.Disamb
 , selectHidden
 ) where
 
-import Control.Applicative ((<$>), (<*>))
+import Control.Applicative ((<$>), (<*>), pure)
 import Data.Maybe (fromJust)
 import Data.List (find)
+import Data.Binary (Binary, get, put)
+import Data.Text.Binary ()
 import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
 import qualified Data.Vector as V
 
-import Data.Binary (Binary, get, put)
-import Data.Text.Binary ()
-
-import qualified Data.CRF.Chain2.Pair as CRF
 import qualified Control.Monad.Ox as Ox
+import qualified Control.Monad.Ox.Text as Ox
+import qualified Data.CRF.Chain2.Pair as CRF
 import qualified Numeric.SGD as SGD
 import qualified Data.Tagset.Positional as TP
 
@@ -89,9 +89,22 @@ type Ob = ([Int], T.Text)
 schema :: Schema t ()
 schema sent = \k -> do
     mapM_ (Ox.save . lowOrth) [k - 1, k, k + 1]
+    _ <- Ox.whenJT (oov `at` k) $ do
+        mapM_ (Ox.save . lowPref k) [1, 2, 3]
+        mapM_ (Ox.save . lowSuff k) [1, 2, 3]
+        Ox.save (isBeg k <> pure "-" <> shapeP k)
+    return ()
   where
     at          = Ox.atWith sent
     lowOrth i   = T.toLower <$> orth `at` i
+    lowPref i j = Ox.prefix j =<< lowOrth i
+    lowSuff i j = Ox.suffix j =<< lowOrth i
+    shape i     = Ox.shape <$> orth `at` i
+    shapeP i    = Ox.pack <$> shape i
+    isBeg i     = (Just . boolF) (i == 0)
+    boolF True  = "T"
+    boolF False = "F"
+    x <> y      = T.append <$> x <*> y
 
 -- | Schematize the input sentence according to 'schema' rules.
 schematize :: Sent t -> CRF.Sent Ob t
@@ -180,7 +193,7 @@ selectHidden :: FeatSel
 selectHidden = CRF.selectHidden
 
 -- | TODO: Abstract over the format type.
-learn
+train
     :: SGD.SgdArgs      -- ^ SGD parameters 
     -> FilePath         -- ^ File with positional tagset definition
     -> T.Text        	-- ^ The tag indicating unknown words
@@ -189,7 +202,7 @@ learn
     -> FilePath         -- ^ Train file (plain format)
     -> Maybe FilePath   -- ^ Maybe eval file
     -> IO Disamb
-learn sgdArgs tagsetPath ign tierConf ftSel trainPath evalPath'Maybe = do
+train sgdArgs tagsetPath ign tierConf ftSel trainPath evalPath'Maybe = do
     _tagset <- TP.parseTagset tagsetPath <$> readFile tagsetPath
     _crf <- CRF.train sgdArgs ftSel
         (schemed _tagset ign tierConf trainPath)
