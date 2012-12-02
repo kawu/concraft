@@ -133,7 +133,7 @@ parseWord ign xs =
     (_orth, _space) = parseHeader (head xs)
     ys          = map (parseInterp ign) (tail xs)
     _known      = not (Nothing `elem` ys)
-    _interps    = M.fromList (catMaybes ys)
+    _interps    = M.fromListWith max (catMaybes ys)
 
 parseInterp :: L.Text -> L.Text -> Maybe (Interp, Bool)
 parseInterp ign =

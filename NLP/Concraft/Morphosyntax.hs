@@ -27,7 +27,8 @@ type Sent t = [Word t]
 data Word t = Word {
     -- | Orthographic form.
       orth  :: T.Text
-    -- | Set of word interpretations.
+    -- | Set of word interpretations.  To each interpretation a probability
+    -- of correctness within the context is assigned.
     , tags  :: Prob t
     -- | Out-of-vocabulary (OOV) word, i.e. word unknown to the
     -- morphosyntactic analyser.
@@ -40,18 +41,18 @@ mapWord f w = w { tags = mapProb f (tags w) }
 
 
 -- | A probability distribution defined over elements of type a.
--- All elements not included in the map have probability equal to 0.
 newtype Prob a = Prob { unProb :: M.Map a Double }
     deriving (Show, Eq, Ord)
 
 -- | Make a probability distribution.
 mkProb :: Ord a => [(a, Double)] -> Prob a
 mkProb =
-    Prob . normalize . M.fromListWith (+)
+    Prob . normalize . M.fromListWith (+) . filter ((>=0).snd)
   where
-    normalize dist =
-        let z = sum (M.elems dist)
-        in  fmap (/z) dist
+    normalize dist
+        | z == 0    = error "mkProb: no elements with positive probability"
+        | otherwise =  fmap (/z) dist
+        where z = sum (M.elems dist)
 
 -- | Map function over probability elements. 
 mapProb :: Ord b => (a -> b) -> Prob a -> Prob b

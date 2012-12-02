@@ -152,5 +152,5 @@ schemed F.Format{..} path =
     F.Word{..} = wordHandler
     onSent sent =
         let xs = map extract (split sent)
-            mkDist = CRF.mkDist . M.toList . Mx.unProb . Mx.tags
-        in  [zip (schematize xs) (map mkDist xs)]
+            mkProb = CRF.mkProb . M.toList . Mx.unProb . Mx.tags
+        in  [zip (schematize xs) (map mkProb xs)]
