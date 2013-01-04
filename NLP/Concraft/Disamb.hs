@@ -96,11 +96,11 @@ unSplit split' word x = fromJust $ find ((==x) . split') (interps word)
 
 -- | Chain CRF abstraction.
 data ChainCRF c t = ChainCRF
-    { tag :: c t -> CRF.Sent Ob t -> [t]
+    { tag :: c -> CRF.Sent Ob t -> [t]
     , train
         :: IO [CRF.SentL Ob t]          -- ^ Training data 'IO' action
         -> Maybe (IO [CRF.SentL Ob t])  -- ^ Maybe evalation data
-        -> IO (c t) }                   -- ^ Resulting model
+        -> IO c }                  	-- ^ Resulting model
 
 -- | The disambiguation model.
 -- c : CRF model
@@ -109,7 +109,7 @@ data ChainCRF c t = ChainCRF
 data Disamb c r t = Disamb
     { chain :: ChainCRF c t
     , split :: Split r t
-    , crf   :: c t }
+    , crf   :: c }
 
 -- | Perform context-sensitive disambiguation.
 disamb :: (Ord r, Ord t) => Disamb c r t -> Mx.Sent r -> Mx.Sent r
