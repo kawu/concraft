@@ -8,27 +8,18 @@ module NLP.Concraft.Disamb
 , Ob
 , schema
 , schematize
--- , TierConf
--- , tear
--- , deTear
--- , deTears
--- , Disamb (..)
--- , disamb
--- , train
--- , tag
--- 
--- -- * Feature selection
--- , FeatSel
--- , selectPresent
--- , selectHidden
+, Split
+, ChainCRF (..)
+, Disamb (..)
+, disamb
+, disambDoc
+, trainOn
 ) where
 
 import Control.Applicative ((<$>), (<*>), pure)
 import Data.Maybe (fromJust)
 import Data.List (find)
 import Data.Foldable (Foldable, foldMap)
-import Data.Binary (Binary, get, put)
-import Data.Text.Binary ()
 import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Text as T
@@ -36,11 +27,9 @@ import qualified Data.Vector as V
 import qualified Data.Text.Lazy as L
 import qualified Data.Text.Lazy.IO as L
 
+import qualified Data.CRF.Chain2.Generic.External as CRF
 import qualified Control.Monad.Ox as Ox
 import qualified Control.Monad.Ox.Text as Ox
-import qualified Data.CRF.Chain2.Generic.External as CRF
-import qualified Numeric.SGD as SGD
-import qualified Data.Tagset.Positional as TP
 
 import qualified NLP.Concraft.Morphosyntax as Mx
 import qualified NLP.Concraft.Format as F
@@ -96,38 +85,44 @@ schematize sent =
     obs = S.fromList . Ox.execOx . schema v
     lbs = interpsSet . (v V.!)
 
+-- | Split is just a function from an original tag form
+-- to a complex tag form.
+type Split r t = r -> t
+
+-- | Unsplit the complex tag (assuming, that it is one
+-- of the interpretations of the word).
+unSplit :: Eq t => Split r t -> Mx.Word r -> t -> r
+unSplit split' word x = fromJust $ find ((==x) . split') (interps word)
+
+-- | Chain CRF abstraction.
+data ChainCRF c t = ChainCRF
+    { tag :: c t -> CRF.Sent Ob t -> [t]
+    , train
+        :: IO [CRF.SentL Ob t]          -- ^ Training data 'IO' action
+        -> Maybe (IO [CRF.SentL Ob t])  -- ^ Maybe evalation data
+        -> IO (c t) }                   -- ^ Resulting model
+
 -- | The disambiguation model.
 -- c : CRF model
 -- r : raw tag form
 -- t : processed tag (e.g. layered)
 data Disamb c r t = Disamb
-    -- { crf       :: CRF.CRF Ob Tag Tag
-    -- { crf   :: c
-    { crf   :: c t
-    , tear  :: r -> t }
-
--- | Unsplit the complex tag (assuming, that it is one
--- of interpretations of the word).
-unTear :: Eq t => (r -> t) -> Mx.Word r -> t -> r
-unTear tear' word x = fromJust $ find ((==x) . tear') (interps word)
-
-class ChainCRF c t where
-    tag :: c t -> CRF.Sent Ob t -> [t]
+    { chain :: ChainCRF c t
+    , split :: Split r t
+    , crf   :: c t }
 
 -- | Perform context-sensitive disambiguation.
-disamb
-    :: (Ord r, Ord t, ChainCRF c t)
-    => Disamb c r t -> Mx.Sent r -> Mx.Sent r
+disamb :: (Ord r, Ord t) => Disamb c r t -> Mx.Sent r -> Mx.Sent r
 disamb Disamb{..} sent
     = map (uncurry embed)
     . zip sent
-    . tag crf
+    . tag chain crf
     . schematize 
-    . Mx.mapSent tear
+    . Mx.mapSent split
     $ sent
   where
     embed word tag =
-        let raw = unTear tear word tag
+        let raw = unSplit split word tag
             choice = mkChoice word raw
         in  word { Mx.tagProb = choice }
     mkChoice word x = Mx.mkProb
@@ -138,76 +133,60 @@ disamb Disamb{..} sent
 
 -- | Tag the sentence.
 disambSent
-    :: (Ord t, ChainCRF c t)
+    :: Ord t
     => F.Sent s w
     -> Disamb c F.Tag t
     -> s -> s
 disambSent F.Sent{..} dmb sent =
-  flip unSplit sent
+  flip mergeSent sent
     [ select (Mx.tagProb word) orig
     | (word, orig) <- zip
         (doDmb sent)
-        (split sent) ]
+        (parseSent sent) ]
   where
     -- Word handler.
     F.Word{..} = wordHandler
     -- Perform disambiguation.
-    doDmb = disamb dmb . map extract . split
+    doDmb = disamb dmb . map extract . parseSent
 
 -- | Disamb file.
-disambFile
-    :: (Functor f, Ord t, ChainCRF c t)
-    => F.Format f s w   -- ^ Format handler
+disambDoc
+    :: (Functor f, Ord t)
+    => F.Doc f s w      -- ^ Document format handler
     -> Disamb c F.Tag t -- ^ Disambiguation model
     -> L.Text           -- ^ Input
     -> L.Text           -- ^ Output
-disambFile F.Format{..} dmb =
+disambDoc F.Doc{..} dmb =
     let onSent = disambSent sentHandler dmb
-    in  unParse . fmap onSent . parse
+    in  showDoc . fmap onSent . parseDoc
 
--- type FeatSel = CRF.FeatSel CRF.Ob CRF.Lb CRF.Feat
--- 
--- -- | Present features selection.
--- selectPresent :: FeatSel
--- selectPresent = CRF.selectPresent
--- 
--- -- | Hidden features selection.
--- selectHidden :: FeatSel
--- selectHidden = CRF.selectHidden
--- 
--- -- | Train disamb model.
--- train
---     :: Foldable f
---     => F.Format f s w
---     -> SGD.SgdArgs      -- ^ SGD parameters 
---     -> FilePath         -- ^ File with positional tagset definition
---     -> T.Text        	-- ^ The tag indicating unknown words
---     -> TierConf         -- ^ Tiered tagging configuration
---     -> FeatSel          -- ^ Feature selection 
---     -> FilePath         -- ^ Training file
---     -> Maybe FilePath   -- ^ Maybe eval file
---     -> IO Disamb
--- train format sgdArgs tagsetPath ign tierConf ftSel
---       trainPath evalPath'Maybe = do
---     _tagset <- TP.parseTagset tagsetPath <$> readFile tagsetPath
---     _crf <- CRF.train sgdArgs ftSel
---         (schemed format _tagset ign tierConf trainPath)
---         (schemed format _tagset ign tierConf <$> evalPath'Maybe)
---     return $ Disamb _crf _tagset tierConf
--- 
--- -- | Schematized data from the plain file.
--- schemed
---     :: Foldable t => F.Format t s w -> TP.Tagset -> T.Text
---     -> TierConf -> FilePath -> IO [CRF.SentL Ob (Tag, Tag)]
--- schemed F.Format{..} tagset _ign cfg path =
---     foldMap onSent . parse <$> L.readFile path
---   where
---     F.Sent{..} = sentHandler
---     F.Word{..} = wordHandler
---     onSent sent =
---         [zip (schematize xs) (map mkDist xs)]
---       where
---         xs  = map (mapWord smash . extract) (split sent)
---         smash = tear cfg . parseTag
---         parseTag = TP.parseTag tagset
---         mkDist = CRF.mkDist . M.toList . unProb . tags
+-- | Train disamb model.
+trainOn
+    :: (Foldable f, Ord t)
+    => F.Doc f s w
+    -> ChainCRF c t
+    -> Split F.Tag t    -- ^ Tiered tagging
+    -> FilePath         -- ^ Training file
+    -> Maybe FilePath   -- ^ Maybe eval file
+    -> IO (Disamb c F.Tag t)
+trainOn format chain'@ChainCRF{..} split' trainPath evalPath'Maybe = do
+    crf' <- train
+        (schemed format split' trainPath)
+        (schemed format split' <$> evalPath'Maybe)
+    return $ Disamb chain' split' crf'
+
+-- | Schematized data from the plain file.
+schemed
+    :: (Foldable f, Ord t)
+    => F.Doc f s w -> Split F.Tag t
+    -> FilePath -> IO [CRF.SentL Ob t]
+schemed F.Doc{..} split path =
+    foldMap onSent . parseDoc <$> L.readFile path
+  where
+    F.Sent{..} = sentHandler
+    F.Word{..} = wordHandler
+    onSent sent =
+        [zip (schematize xs) (map mkDist xs)]
+      where
+        xs  = map (Mx.mapWord split . extract) (parseSent sent)
+        mkDist = CRF.mkDist . M.toList . Mx.unProb . Mx.tagProb

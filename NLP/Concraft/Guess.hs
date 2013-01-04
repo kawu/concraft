@@ -92,14 +92,14 @@ guess k gsr sent = CRF.tagK k (crf gsr) (schematize sent)
 -- | Tag sentence in external format.  Selected interpretations
 -- (tags correct within the context) will be preserved.
 tagSent :: F.Sent s w -> Int -> Guesser T.Text -> s -> s
-tagSent F.Sent{..} k gsr sent = flip unSplit sent
+tagSent F.Sent{..} k gsr sent = flip mergeSent sent
     [ select pr word
-    | (pr, word) <- zip probs (split sent) ]
+    | (pr, word) <- zip probs (parseSent sent) ]
   where
     -- Extract word handler.
     F.Word{..} = wordHandler
     -- Word in internal format.
-    words   = map extract (split sent)
+    words   = map extract (parseSent sent)
     -- Guessed lists of interpretations for individual words.
     guessed = guess k gsr words
     -- Resultant probability distributions. 
@@ -116,20 +116,20 @@ tagSent F.Sent{..} k gsr sent = flip unSplit sent
 -- | Tag file.
 tag
     :: Functor f
-    => F.Format f s w   -- ^ Format handler
+    => F.Doc f s w  	-- ^ Document format handler
     -> Int              -- ^ Guesser argument
     -> Guesser T.Text   -- ^ Guesser itself
     -> L.Text           -- ^ Input
     -> L.Text           -- ^ Output
-tag F.Format{..} k gsr
-    = unParse 
+tag F.Doc{..} k gsr
+    = showDoc 
     . fmap (tagSent sentHandler k gsr)
-    . parse
+    . parseDoc
 
 -- | Train guesser.
 train
     :: Foldable f
-    => F.Format f s w
+    => F.Doc f s w
     -> SGD.SgdArgs      -- ^ SGD parameters 
     -> FilePath         -- ^ Training file
     -> Maybe FilePath   -- ^ Maybe eval file
@@ -143,14 +143,14 @@ train format sgdArgs trainPath evalPath'Maybe = do
 
 -- | Schematized data from the plain file.
 schemed
-    :: Foldable t => F.Format t s w
+    :: Foldable t => F.Doc t s w
     -> FilePath -> IO [CRF.SentL Ob T.Text]
-schemed F.Format{..} path =
-    foldMap onSent . parse <$> L.readFile path
+schemed F.Doc{..} path =
+    foldMap onSent . parseDoc <$> L.readFile path
   where
     F.Sent{..} = sentHandler
     F.Word{..} = wordHandler
     onSent sent =
-        let xs = map extract (split sent)
+        let xs = map extract (parseSent sent)
             mkProb = CRF.mkProb . M.toList . Mx.unProb . Mx.tagProb
         in  [zip (schematize xs) (map mkProb xs)]

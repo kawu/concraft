@@ -6,7 +6,7 @@ module NLP.Concraft.Format
 ( Tag
 , Word (..)
 , Sent (..)
-, Format (..)
+, Doc (..)
 ) where
 
 import Prelude hiding (words, unwords)
@@ -27,18 +27,18 @@ data Word w = Word {
 -- | Sentence handler.
 data Sent s w = Sent {
     -- | Split sentence into a list of words.
-      split         :: s -> [w]
+      parseSent     :: s -> [w]
     -- | Merge words with a sentence.
-    , unSplit       :: [w] -> s -> s
+    , mergeSent     :: [w] -> s -> s
     -- | Words handler.
     , wordHandler   :: Word w }
 
 -- | Document format.
-data Format f s w = Format {
+data Doc f s w = Doc {
     -- | Parse textual interpretations into a functor with
     -- sentence elements.
-      parse         :: L.Text -> f s
+      parseDoc      :: L.Text -> f s
     -- | Show textual reprezentation of a document.
-    , unParse       :: f s -> L.Text
+    , showDoc       :: f s -> L.Text
     -- | Sentence handler.
     , sentHandler   :: Sent s w }

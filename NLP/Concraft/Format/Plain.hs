@@ -60,8 +60,8 @@ data Interp = Interp
     deriving (Show, Eq, Ord)
 
 -- | Create document handler given value of the /ignore/ tag.
-plainFormat :: T.Text -> F.Format [] [Token] Token
-plainFormat ign = F.Format (parsePlain ign) (showPlain ign) sentHandler
+plainFormat :: T.Text -> F.Doc [] [Token] Token
+plainFormat ign = F.Doc (parsePlain ign) (showPlain ign) sentHandler
 
 -- | Sentence handler.
 sentHandler :: F.Sent [Token] Token
