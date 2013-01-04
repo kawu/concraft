@@ -10,8 +10,8 @@ module NLP.Concraft.Guess
 , schematize
 , Guesser (..)
 , guess
-, train
-, tag
+, guessDoc
+, trainOn
 ) where
 
 import Prelude hiding (words)
@@ -91,8 +91,8 @@ guess k gsr sent = CRF.tagK k (crf gsr) (schematize sent)
 
 -- | Tag sentence in external format.  Selected interpretations
 -- (tags correct within the context) will be preserved.
-tagSent :: F.Sent s w -> Int -> Guesser T.Text -> s -> s
-tagSent F.Sent{..} k gsr sent = flip mergeSent sent
+guessSent :: F.Sent s w -> Int -> Guesser T.Text -> s -> s
+guessSent F.Sent{..} k gsr sent = flip mergeSent sent
     [ select pr word
     | (pr, word) <- zip probs (parseSent sent) ]
   where
@@ -114,27 +114,27 @@ tagSent F.Sent{..} k gsr sent = flip mergeSent sent
         ++ zip xs [0..]
 
 -- | Tag file.
-tag
+guessDoc
     :: Functor f
     => F.Doc f s w  	-- ^ Document format handler
     -> Int              -- ^ Guesser argument
     -> Guesser T.Text   -- ^ Guesser itself
     -> L.Text           -- ^ Input
     -> L.Text           -- ^ Output
-tag F.Doc{..} k gsr
+guessDoc F.Doc{..} k gsr
     = showDoc 
-    . fmap (tagSent sentHandler k gsr)
+    . fmap (guessSent sentHandler k gsr)
     . parseDoc
 
 -- | Train guesser.
-train
+trainOn
     :: Foldable f
     => F.Doc f s w
     -> SGD.SgdArgs      -- ^ SGD parameters 
     -> FilePath         -- ^ Training file
     -> Maybe FilePath   -- ^ Maybe eval file
     -> IO (Guesser T.Text)
-train format sgdArgs trainPath evalPath'Maybe = do
+trainOn format sgdArgs trainPath evalPath'Maybe = do
     _crf <- CRF.train sgdArgs
         (schemed format trainPath)
         (schemed format <$> evalPath'Maybe)

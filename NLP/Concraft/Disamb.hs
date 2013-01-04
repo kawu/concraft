@@ -100,7 +100,7 @@ data ChainCRF c t = ChainCRF
     , train
         :: IO [CRF.SentL Ob t]          -- ^ Training data 'IO' action
         -> Maybe (IO [CRF.SentL Ob t])  -- ^ Maybe evalation data
-        -> IO c }                  	-- ^ Resulting model
+        -> IO c }                       -- ^ Resulting model
 
 -- | The disambiguation model.
 -- c : CRF model
@@ -112,7 +112,7 @@ data Disamb c r t = Disamb
     , crf   :: c }
 
 -- | Perform context-sensitive disambiguation.
-disamb :: (Ord r, Ord t) => Disamb c r t -> Mx.Sent r -> Mx.Sent r
+disamb :: (Ord r, Ord t) => Disamb c r t -> Mx.Sent r -> [r]
 disamb Disamb{..} sent
     = map (uncurry embed)
     . zip sent
@@ -121,15 +121,7 @@ disamb Disamb{..} sent
     . Mx.mapSent split
     $ sent
   where
-    embed word tag =
-        let raw = unSplit split word tag
-            choice = mkChoice word raw
-        in  word { Mx.tagProb = choice }
-    mkChoice word x = Mx.mkProb
-        [ if x == y
-            then (x, 1)
-            else (x, 0)
-        | y <- interps word ]
+    embed = unSplit split
 
 -- | Tag the sentence.
 disambSent
@@ -139,15 +131,20 @@ disambSent
     -> s -> s
 disambSent F.Sent{..} dmb sent =
   flip mergeSent sent
-    [ select (Mx.tagProb word) orig
-    | (word, orig) <- zip
+    [ select prob orig
+    | (prob, orig) <- zip
         (doDmb sent)
         (parseSent sent) ]
   where
-    -- Word handler.
     F.Word{..} = wordHandler
-    -- Perform disambiguation.
-    doDmb = disamb dmb . map extract . parseSent
+    doDmb orig =
+        let xs = map extract (parseSent orig)
+        in  map (uncurry mkChoice) (zip xs (disamb dmb xs))
+    mkChoice word x = Mx.mkProb
+        [ if x == y
+            then (x, 1)
+            else (x, 0)
+        | y <- interps word ]
 
 -- | Disamb file.
 disambDoc
