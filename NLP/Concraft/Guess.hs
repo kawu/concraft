@@ -78,7 +78,7 @@ schematize sent =
     -- of potential interpretations to reduce memory footprint.
     lbs i 
         | Mx.oov w  = S.empty
-        | otherwise = M.keysSet . Mx.unProb . Mx.tags $ w
+        | otherwise = M.keysSet . Mx.unProb . Mx.tagProb $ w
         where w = v V.! i
 
 -- | A guesser represented by the conditional random field.
@@ -105,8 +105,8 @@ tagSent F.Sent{..} k gsr sent = flip unSplit sent
     -- Resultant probability distributions. 
     probs   =
         [ if Mx.oov word
-            then addInterps (Mx.tags word) xs
-            else Mx.tags word
+            then addInterps (Mx.tagProb word) xs
+            else Mx.tagProb word
         | (xs, word) <- zip guessed words ]
     -- Add new interpretations.
     addInterps pr xs = Mx.mkProb
@@ -152,5 +152,5 @@ schemed F.Format{..} path =
     F.Word{..} = wordHandler
     onSent sent =
         let xs = map extract (split sent)
-            mkProb = CRF.mkProb . M.toList . Mx.unProb . Mx.tags
+            mkProb = CRF.mkProb . M.toList . Mx.unProb . Mx.tagProb
         in  [zip (schematize xs) (map mkProb xs)]

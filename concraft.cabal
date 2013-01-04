@@ -34,7 +34,7 @@ library
       , NLP.Concraft.Format
       , NLP.Concraft.Format.Plain
       , NLP.Concraft.Guess
---       , NLP.Concraft.Disamb
+      , NLP.Concraft.Disamb
 
     ghc-options: -Wall -O2
 

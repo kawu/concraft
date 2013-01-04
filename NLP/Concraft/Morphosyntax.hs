@@ -8,6 +8,7 @@ module NLP.Concraft.Morphosyntax
   Sent
 , Word (..)
 , mapWord
+, mapSent
 -- * Probability
 , Prob (unProb)
 , mkProb
@@ -26,19 +27,22 @@ type Sent t = [Word t]
 -- | A word parametrized over a tag type.
 data Word t = Word {
     -- | Orthographic form.
-      orth  :: T.Text
+      orth      :: T.Text
     -- | Set of word interpretations.  To each interpretation a probability
     -- of correctness within the context is assigned.
-    , tags  :: Prob t
+    , tagProb   :: Prob t
     -- | Out-of-vocabulary (OOV) word, i.e. word unknown to the
     -- morphosyntactic analyser.
-    , oov   :: Bool }
+    , oov       :: Bool }
     deriving (Show, Eq, Ord)
 
 -- | Map function over word tags.
 mapWord :: Ord b => (a -> b) -> Word a -> Word b
-mapWord f w = w { tags = mapProb f (tags w) }
+mapWord f w = w { tagProb = mapProb f (tagProb w) }
 
+-- | Map function over sentence tags.
+mapSent :: Ord b => (a -> b) -> Sent a -> Sent b
+mapSent = map . mapWord
 
 -- | A probability distribution defined over elements of type a.
 newtype Prob a = Prob { unProb :: M.Map a Double }

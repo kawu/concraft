@@ -74,11 +74,11 @@ wordHandler = F.Word extract select
 -- | Extract information relevant for tagging.
 extract :: Token -> Mx.Word T.Text
 extract tok = Mx.Word
-    { Mx.orth   = orth tok
-    , Mx.tags   = Mx.mkProb
+    { Mx.orth       = orth tok
+    , Mx.tagProb    = Mx.mkProb
         [ (tag x, if disamb then 1 else 0)
         | (x, disamb) <- M.toList (interps tok) ]
-    , Mx.oov    = not (known tok) }
+    , Mx.oov        = not (known tok) }
 
 -- | Select interpretations.
 select :: Mx.Prob T.Text -> Token -> Token
