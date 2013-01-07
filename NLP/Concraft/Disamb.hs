@@ -146,7 +146,7 @@ disambSent F.Sent{..} dmb sent =
             else (x, 0)
         | y <- interps word ]
 
--- | Disamb file.
+-- | Disambiguate document.
 disambDoc
     :: (Functor f, Ord t)
     => F.Doc f s w      -- ^ Document format handler

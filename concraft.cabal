@@ -18,11 +18,13 @@ build-type:         Simple
 library
     build-depends:
         base >= 4 && < 5
+      , array
       , containers
       , binary
       , text
       , text-binary >= 0.1 && < 0.2
       , vector
+      , vector-binary
       , crf-chain1-constrained >= 0.1.2 && < 0.2
       , monad-ox >= 0.2 && < 0.3
       , sgd >= 0.2.2 && < 0.3
