@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 -- | The module provides functions for splitting positional tags.
 -- They can be used together with the layered disambiguation model.
@@ -8,6 +9,7 @@ module NLP.Concraft.Disamb.Positional
 , Part (..)
 , select
 , split
+, tierConfDefault
 ) where
 
 import Control.Applicative ((<$>), (<*>))
@@ -50,3 +52,13 @@ split :: [Tier] -> TP.Tag -> [Part]
 split tiers tag =
     [ select tier tag
     | tier <- tiers ]
+
+-- | Default tiered tagging configuration.
+tierConfDefault :: [Tier]
+tierConfDefault =
+    [tier1, tier2]
+  where
+    tier1 = Tier True $ S.fromList ["cas", "per"]
+    tier2 = Tier False $ S.fromList
+        [ "nmb", "gnd", "deg", "asp" , "ngt", "acm"
+        , "acn", "ppr", "agg", "vlc", "dot" ]

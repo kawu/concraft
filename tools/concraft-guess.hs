@@ -12,7 +12,7 @@ import qualified Numeric.SGD as SGD
 import qualified Data.Text as T
 import qualified Data.Text.Lazy.IO as L
 
-import NLP.Concraft.Guess (trainOn, guessDoc)
+import NLP.Concraft.Guess (trainOn, guessDoc, schemaDefault)
 import NLP.Concraft.Format.Plain (plainFormat)
 
 -- | Data formats. 
@@ -77,7 +77,9 @@ exec TrainMode{..} = do
         putStrLn $ "\nSaving model in " ++ outGuesser ++ "..."
         encodeFile outGuesser gsr
   where
-    doTrain fh = trainOn fh sgdArgs trainPath evalPath
+    doTrain docHandler = trainOn
+    	docHandler schemaDefault sgdArgs
+	trainPath evalPath
     ign = T.pack ignTag
     sgdArgs = SGD.SgdArgs
         { SGD.batchSize = batchSize
@@ -91,5 +93,6 @@ exec TagMode{..} = do
     case format of
         Plain   -> L.putStr $ doTag (plainFormat ign)
   where
-    doTagWith gsr input fh = guessDoc fh guessNum gsr input
+    doTagWith gsr input docHandler = guessDoc
+    	docHandler guessNum schemaDefault gsr input
     ign = T.pack ignTag

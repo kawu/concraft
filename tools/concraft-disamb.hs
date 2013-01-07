@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -8,7 +7,6 @@ import Control.Monad (when)
 import System.Console.CmdArgs
 import Data.Binary (Binary, put, get, encodeFile, decodeFile)
 import Data.Text.Binary ()
-import qualified Data.Set as S
 import qualified Numeric.SGD as SGD
 import qualified Data.Text as T
 import qualified Data.Text.Lazy.IO as L
@@ -22,16 +20,6 @@ import qualified NLP.Concraft.Disamb.Tiered as R
 -- | Data formats. 
 data Format = Plain deriving (Data, Typeable, Show)
 
--- | Tiered tagging configuration.
-tierConfDefault :: [Tier]
-tierConfDefault =
-    [tier1, tier2]
-  where
-    tier1 = Tier True $ S.fromList ["cas", "per"]
-    tier2 = Tier False $ S.fromList
-        [ "nmb", "gnd", "deg", "asp" , "ngt", "acm"
-        , "acn", "ppr", "agg", "vlc", "dot" ]
-
 -- | Disambiguation model data.
 data Disamb = Disamb
     { crf       :: R.CRF Ob Part
@@ -41,15 +29,6 @@ data Disamb = Disamb
 instance Binary Disamb where
     put Disamb{..} = put crf >> put tagset >> put tierConf
     get = Disamb <$> get <*> get <*> get
-
--- -- | Configuration of the disambiguation model.
--- disambWith
---     :: R.FeatSel R.Ob [R.Lb] R.Feat -- ^ Feature selection
---     -> R.CRF R.Ob P.Part
---     -> Disamb (R.CRF R.Ob P.Part) T.Text [P.Part]
--- disambWith featSel = Disamb
---     (R.chainCRF (length tierConf) featSel)
---     (P.split tierConf)
 
 data Args
   = TrainMode
@@ -115,7 +94,7 @@ exec TrainMode{..} = do
         encodeFile outDisamb dmb
   where
     doTrain docHandler tagset' = trainOn
-        docHandler
+        docHandler schemaDefault
         (split tierConfDefault . P.parseTag tagset')
         (R.train (length tierConfDefault) featSel sgdArgs)
         trainPath evalPath
@@ -135,7 +114,8 @@ exec TagMode{..} = do
     case format of
         Plain   -> L.putStr $ doTag (plainFormat ign)
   where
-    doTagWith Disamb{..} input fh = disambDoc fh
+    doTagWith Disamb{..} input docHandler = disambDoc
+    	docHandler schemaDefault
         (split tierConf . P.parseTag tagset)
         (R.tag crf) input
     ign = T.pack ignTag

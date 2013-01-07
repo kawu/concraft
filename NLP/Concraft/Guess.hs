@@ -6,7 +6,7 @@ module NLP.Concraft.Guess
 ( Ox
 , Schema
 , Ob
-, schema
+, schemaDefault
 , schematize
 , Guesser (..)
 , guess
@@ -46,8 +46,8 @@ type Schema t a = V.Vector (Mx.Word t) -> Int -> Ox t a
 -- observation value.
 type Ob = ([Int], T.Text)
 
-schema :: Schema t ()
-schema sent = \k -> do
+schemaDefault :: Schema t ()
+schemaDefault sent = \k -> do
     mapM_ (Ox.save . lowPref k) [1, 2]
     mapM_ (Ox.save . lowSuff k) [1, 2]
     Ox.save (knownAt k)
@@ -66,8 +66,8 @@ schema sent = \k -> do
     x <> y      = T.append <$> x <*> y
 
 -- | Schematize the input sentence with according to 'schema' rules.
-schematize :: Ord t => Mx.Sent t -> CRF.Sent Ob t
-schematize sent =
+schematize :: Ord t => Schema t a -> Mx.Sent t -> CRF.Sent Ob t
+schematize schema sent =
     [ CRF.Word (obs i) (lbs i)
     | i <- [0 .. n - 1] ]
   where
@@ -86,13 +86,13 @@ newtype Guesser t = Guesser { crf :: CRF.CRF Ob t }
     deriving (Binary)
 
 -- | Determine the 'k' most probable labels for each word in the sentence.
-guess :: Ord t => Int -> Guesser t -> Mx.Sent t -> [[t]]
-guess k gsr sent = CRF.tagK k (crf gsr) (schematize sent)
+guess :: Ord t => Int -> Schema t a -> Guesser t -> Mx.Sent t -> [[t]]
+guess k schema gsr sent = CRF.tagK k (crf gsr) (schematize schema sent)
 
 -- | Tag sentence in external format.  Selected interpretations
 -- (tags correct within the context) will be preserved.
-guessSent :: F.Sent s w -> Int -> Guesser T.Text -> s -> s
-guessSent F.Sent{..} k gsr sent = flip mergeSent sent
+guessSent :: F.Sent s w -> Int -> Schema T.Text a -> Guesser T.Text -> s -> s
+guessSent F.Sent{..} k schema gsr sent = flip mergeSent sent
     [ select pr word
     | (pr, word) <- zip probs (parseSent sent) ]
   where
@@ -101,7 +101,7 @@ guessSent F.Sent{..} k gsr sent = flip mergeSent sent
     -- Word in internal format.
     words   = map extract (parseSent sent)
     -- Guessed lists of interpretations for individual words.
-    guessed = guess k gsr words
+    guessed = guess k schema gsr words
     -- Resultant probability distributions. 
     probs   =
         [ if Mx.oov word
@@ -118,34 +118,36 @@ guessDoc
     :: Functor f
     => F.Doc f s w  	-- ^ Document format handler
     -> Int              -- ^ Guesser argument
+    -> Schema T.Text a	-- ^ Observation schema
     -> Guesser T.Text   -- ^ Guesser itself
     -> L.Text           -- ^ Input
     -> L.Text           -- ^ Output
-guessDoc F.Doc{..} k gsr
+guessDoc F.Doc{..} k schema gsr
     = showDoc 
-    . fmap (guessSent sentHandler k gsr)
+    . fmap (guessSent sentHandler k schema gsr)
     . parseDoc
 
 -- | Train guesser.
 trainOn
     :: Foldable f
-    => F.Doc f s w
+    => F.Doc f s w      -- ^ Document format handler
+    -> Schema T.Text a	-- ^ Observation schema
     -> SGD.SgdArgs      -- ^ SGD parameters 
     -> FilePath         -- ^ Training file
     -> Maybe FilePath   -- ^ Maybe eval file
     -> IO (Guesser T.Text)
-trainOn format sgdArgs trainPath evalPath'Maybe = do
+trainOn format schema sgdArgs trainPath evalPath'Maybe = do
     _crf <- CRF.train sgdArgs
-        (schemed format trainPath)
-        (schemed format <$> evalPath'Maybe)
+        (schemed format schema trainPath)
+        (schemed format schema <$> evalPath'Maybe)
         (const CRF.presentFeats)
     return $ Guesser _crf
 
 -- | Schematized data from the plain file.
 schemed
-    :: Foldable t => F.Doc t s w
+    :: Foldable f => F.Doc f s w -> Schema T.Text a
     -> FilePath -> IO [CRF.SentL Ob T.Text]
-schemed F.Doc{..} path =
+schemed F.Doc{..} schema path =
     foldMap onSent . parseDoc <$> L.readFile path
   where
     F.Sent{..} = sentHandler
@@ -153,4 +155,4 @@ schemed F.Doc{..} path =
     onSent sent =
         let xs = map extract (parseSent sent)
             mkProb = CRF.mkProb . M.toList . Mx.unProb . Mx.tagProb
-        in  [zip (schematize xs) (map mkProb xs)]
+        in  [zip (schematize schema xs) (map mkProb xs)]

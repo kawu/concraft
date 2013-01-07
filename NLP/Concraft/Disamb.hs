@@ -6,7 +6,7 @@ module NLP.Concraft.Disamb
 ( Ox
 , Schema
 , Ob
-, schema
+, schemaDefault
 , schematize
 , Split
 , TrainCRF
@@ -54,8 +54,8 @@ type Schema t a = V.Vector (Mx.Word t) -> Int -> Ox t a
 -- observation value.
 type Ob = ([Int], T.Text)
 
-schema :: Schema t ()
-schema sent = \k -> do
+schemaDefault :: Schema t ()
+schemaDefault sent = \k -> do
     mapM_ (Ox.save . lowOrth) [k - 1, k, k + 1]
     _ <- Ox.whenJT (Mx.oov `at` k) $ do
         mapM_ (Ox.save . lowPref k) [1, 2, 3]
@@ -75,8 +75,8 @@ schema sent = \k -> do
     x <> y      = T.append <$> x <*> y
 
 -- | Schematize the input sentence according to 'schema' rules.
-schematize :: Mx.Sent t -> CRF.Sent Ob t
-schematize sent =
+schematize :: Schema t a -> Mx.Sent t -> CRF.Sent Ob t
+schematize schema sent =
     [ CRF.mkWord (obs i) (lbs i)
     | i <- [0 .. n - 1] ]
   where
@@ -104,12 +104,18 @@ type TrainCRF o t c
 type TagCRF o t = CRF.Sent o t -> [t]
 
 -- | Perform context-sensitive disambiguation.
-disamb :: (Ord r, Ord t) => Split r t -> TagCRF Ob t -> Mx.Sent r -> [r]
-disamb split tag sent
+disamb
+    :: (Ord r, Ord t)
+    => Schema t a
+    -> Split r t
+    -> TagCRF Ob t
+    -> Mx.Sent r
+    -> [r]
+disamb schema split tag sent
     = map (uncurry embed)
     . zip sent
     . tag
-    . schematize 
+    . schematize schema
     . Mx.mapSent split
     $ sent
   where
@@ -119,10 +125,11 @@ disamb split tag sent
 disambSent
     :: Ord t
     => F.Sent s w
+    -> Schema t a
     -> Split F.Tag t
     -> TagCRF Ob t
     -> s -> s
-disambSent F.Sent{..} split tag sent =
+disambSent F.Sent{..} schema split tag sent =
   flip mergeSent sent
     [ select prob orig
     | (prob, orig) <- zip
@@ -132,7 +139,7 @@ disambSent F.Sent{..} split tag sent =
     F.Word{..} = wordHandler
     doDmb orig =
         let xs = map extract (parseSent orig)
-        in  map (uncurry mkChoice) (zip xs (disamb split tag xs))
+        in  map (uncurry mkChoice) (zip xs (disamb schema split tag xs))
     mkChoice word x = Mx.mkProb
         [ if x == y
             then (x, 1)
@@ -143,41 +150,43 @@ disambSent F.Sent{..} split tag sent =
 disambDoc
     :: (Functor f, Ord t)
     => F.Doc f s w      -- ^ Document format handler
+    -> Schema t a       -- ^ Observation schema
     -> Split F.Tag t    -- ^ Tiered tagging
     -> TagCRF Ob t      -- ^ CRF tagging function
     -> L.Text           -- ^ Input
     -> L.Text           -- ^ Output
-disambDoc F.Doc{..} split tag =
-    let onSent = disambSent sentHandler split tag
+disambDoc F.Doc{..} schema split tag =
+    let onSent = disambSent sentHandler schema split tag
     in  showDoc . fmap onSent . parseDoc
 
 -- | Train disamb model.
 trainOn
     :: (Foldable f, Ord t)
     => F.Doc f s w      -- ^ Document format handler
+    -> Schema t a       -- ^ Observation schema
     -> Split F.Tag t    -- ^ Tiered tagging
     -> TrainCRF Ob t c  -- ^ CRF training function
     -> FilePath         -- ^ Training file
     -> Maybe FilePath   -- ^ Maybe eval file
     -> IO c             -- ^ Resultant model data
-trainOn format split train trainPath evalPath'Maybe = do
+trainOn format schema split train trainPath evalPath'Maybe = do
     crf <- train
-        (schemed format split trainPath)
-        (schemed format split <$> evalPath'Maybe)
+        (schemed format schema split trainPath)
+        (schemed format schema split <$> evalPath'Maybe)
     return crf
 
 -- | Schematized data from the plain file.
 schemed
     :: (Foldable f, Ord t)
-    => F.Doc f s w -> Split F.Tag t
+    => F.Doc f s w -> Schema t a -> Split F.Tag t
     -> FilePath -> IO [CRF.SentL Ob t]
-schemed F.Doc{..} split path =
+schemed F.Doc{..} schema split path =
     foldMap onSent . parseDoc <$> L.readFile path
   where
     F.Sent{..} = sentHandler
     F.Word{..} = wordHandler
     onSent sent =
-        [zip (schematize xs) (map mkDist xs)]
+        [zip (schematize schema xs) (map mkDist xs)]
       where
         xs  = map (Mx.mapWord split . extract) (parseSent sent)
         mkDist = CRF.mkDist . M.toList . Mx.unProb . Mx.tagProb
