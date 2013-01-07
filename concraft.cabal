@@ -41,6 +41,7 @@ library
       , NLP.Concraft.Guess
       , NLP.Concraft.Disamb
       , NLP.Concraft.Disamb.Tiered
+      , NLP.Concraft.Disamb.Positional
 
     ghc-options: -Wall -O2
 

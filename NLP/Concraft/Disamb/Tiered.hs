@@ -4,7 +4,9 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module NLP.Concraft.Disamb.Tiered
-( Ob (..)
+(
+-- * Tiered model
+  Ob (..)
 , Lb (..)
 , Feat (..)
 , chainCRF
