@@ -28,6 +28,9 @@ library
       , sgd >= 0.2.2 && < 0.3
       , tagset-positional >= 0.2 && < 0.3
       , crf-chain2-generic >= 0.3 && < 0.4
+      , monad-codec >= 0.2 && < 0.3
+      , data-lens
+      , comonad-transformers
 
     exposed-modules:
         NLP.Concraft.Morphosyntax
@@ -35,6 +38,7 @@ library
       , NLP.Concraft.Format.Plain
       , NLP.Concraft.Guess
       , NLP.Concraft.Disamb
+      , NLP.Concraft.Disamb.Tiered
 
     ghc-options: -Wall -O2
 
