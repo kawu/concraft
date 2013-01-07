@@ -9,7 +9,9 @@ module NLP.Concraft.Disamb.Tiered
   Ob (..)
 , Lb (..)
 , Feat (..)
-, chainCRF
+, CRF (..)
+, train
+, tag
 
 -- * Feature selection
 , FeatSel
@@ -38,7 +40,6 @@ import Data.CRF.Chain2.Generic.Model
     , selectHidden, selectPresent
     , core, withCore )
 import Data.CRF.Chain2.Generic.Internal (FeatIx(..))
-import Data.CRF.Chain2.Generic.External (Sent, SentL)
 import qualified Data.CRF.Chain2.Generic.Inference as I
 import qualified Data.CRF.Chain2.Generic.Train as Train
 import qualified Data.CRF.Chain2.Generic.FeatMap as F
@@ -235,14 +236,12 @@ codecSpec n = Train.CodecSpec
 -- Use the provided feature selection function to determine model
 -- features.
 train
-    :: (Ord a, Ord b)
+    :: (Ord o, Ord t)
     => Int                          -- ^ Number of tagging layers
-    -> SGD.SgdArgs                  -- ^ Args for SGD
     -> FeatSel Ob [Lb] Feat         -- ^ Feature selection
-    -> IO [SentL a [b]]             -- ^ Training data 'IO' action
-    -> Maybe (IO [SentL a [b]])     -- ^ Maybe evalation data
-    -> IO (CRF a b)                 -- ^ Resulting codec and model
-train n sgdArgs featSel trainIO evalIO'Maybe = do
+    -> SGD.SgdArgs                  -- ^ Args for SGD
+    -> D.TrainCRF o [t] (CRF o t)
+train n featSel sgdArgs trainIO evalIO'Maybe = do
     (_codecData, _model) <- Train.train
         sgdArgs
         (codecSpec n)
@@ -253,7 +252,7 @@ train n sgdArgs featSel trainIO evalIO'Maybe = do
     return $ CRF n _codecData _model
 
 -- | Find the most probable label sequence.
-tag :: (Ord a, Ord b) => CRF a b -> Sent a [b] -> [[b]]
+tag :: (Ord o, Ord t) => CRF o t -> D.TagCRF o [t]
 tag CRF{..} sent
     = onWords . decodeLabels cdc codecData
     . I.tag model . encodeSent cdc codecData
@@ -264,17 +263,16 @@ tag CRF{..} sent
         [ unJust cdc codecData word x
         | (word, x) <- zip sent xs ]
 
--- | Instantiation of chain CRF.
-chainCRF
-    :: Ord t
-    => Int                          -- ^ Number of tagging layers
-    -> SGD.SgdArgs                  -- ^ Args for SGD
-    -> FeatSel Ob [Lb] Feat         -- ^ Feature selection
-    -> D.ChainCRF (CRF D.Ob t) [t]
-chainCRF n sgdArgs featSel = D.ChainCRF
-    { D.tag = tag
-    , D.train = train n sgdArgs featSel }
-
+-- -- | Instantiation of chain CRF.
+-- chainCRF
+--     :: Ord t
+--     => Int                          -- ^ Number of tagging layers
+--     -> FeatSel Ob [Lb] Feat         -- ^ Feature selection
+--     -> D.ChainCRF (CRF D.Ob t) [t]
+-- chainCRF n featSel = D.ChainCRF
+--     { D.tag = tag
+--     , D.train = train n featSel }
+-- 
 -- disambConf
 --     :: Ord t
 --     => Int                          -- ^ Number of tagging layers

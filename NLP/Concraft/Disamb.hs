@@ -9,8 +9,8 @@ module NLP.Concraft.Disamb
 , schema
 , schematize
 , Split
-, ChainCRF (..)
-, Disamb (..)
+, TrainCRF
+, TagCRF
 , disamb
 , disambDoc
 , trainOn
@@ -94,29 +94,21 @@ type Split r t = r -> t
 unSplit :: Eq t => Split r t -> Mx.Word r -> t -> r
 unSplit split' word x = fromJust $ find ((==x) . split') (interps word)
 
--- | Chain CRF abstraction.
-data ChainCRF c t = ChainCRF
-    { tag :: c -> CRF.Sent Ob t -> [t]
-    , train
-        :: IO [CRF.SentL Ob t]          -- ^ Training data 'IO' action
-        -> Maybe (IO [CRF.SentL Ob t])  -- ^ Maybe evalation data
-        -> IO c }                       -- ^ Resulting model
+-- | CRF training function.
+type TrainCRF o t c
+    =  IO [CRF.SentL o t]           -- ^ Training data 'IO' action
+    -> Maybe (IO [CRF.SentL o t])   -- ^ Maybe evalation data
+    -> IO c                         -- ^ Resulting model
 
--- | The disambiguation model.
--- c : CRF model
--- r : raw tag form
--- t : processed tag (e.g. layered)
-data Disamb c r t = Disamb
-    { chain :: ChainCRF c t
-    , split :: Split r t
-    , crf   :: c }
+-- | CRF tagging function.
+type TagCRF o t = CRF.Sent o t -> [t]
 
 -- | Perform context-sensitive disambiguation.
-disamb :: (Ord r, Ord t) => Disamb c r t -> Mx.Sent r -> [r]
-disamb Disamb{..} sent
+disamb :: (Ord r, Ord t) => Split r t -> TagCRF Ob t -> Mx.Sent r -> [r]
+disamb split tag sent
     = map (uncurry embed)
     . zip sent
-    . tag chain crf
+    . tag
     . schematize 
     . Mx.mapSent split
     $ sent
@@ -127,9 +119,10 @@ disamb Disamb{..} sent
 disambSent
     :: Ord t
     => F.Sent s w
-    -> Disamb c F.Tag t
+    -> Split F.Tag t
+    -> TagCRF Ob t
     -> s -> s
-disambSent F.Sent{..} dmb sent =
+disambSent F.Sent{..} split tag sent =
   flip mergeSent sent
     [ select prob orig
     | (prob, orig) <- zip
@@ -139,7 +132,7 @@ disambSent F.Sent{..} dmb sent =
     F.Word{..} = wordHandler
     doDmb orig =
         let xs = map extract (parseSent orig)
-        in  map (uncurry mkChoice) (zip xs (disamb dmb xs))
+        in  map (uncurry mkChoice) (zip xs (disamb split tag xs))
     mkChoice word x = Mx.mkProb
         [ if x == y
             then (x, 1)
@@ -150,27 +143,28 @@ disambSent F.Sent{..} dmb sent =
 disambDoc
     :: (Functor f, Ord t)
     => F.Doc f s w      -- ^ Document format handler
-    -> Disamb c F.Tag t -- ^ Disambiguation model
+    -> Split F.Tag t    -- ^ Tiered tagging
+    -> TagCRF Ob t      -- ^ CRF tagging function
     -> L.Text           -- ^ Input
     -> L.Text           -- ^ Output
-disambDoc F.Doc{..} dmb =
-    let onSent = disambSent sentHandler dmb
+disambDoc F.Doc{..} split tag =
+    let onSent = disambSent sentHandler split tag
     in  showDoc . fmap onSent . parseDoc
 
 -- | Train disamb model.
 trainOn
     :: (Foldable f, Ord t)
-    => F.Doc f s w
-    -> ChainCRF c t
+    => F.Doc f s w      -- ^ Document format handler
     -> Split F.Tag t    -- ^ Tiered tagging
+    -> TrainCRF Ob t c  -- ^ CRF training function
     -> FilePath         -- ^ Training file
     -> Maybe FilePath   -- ^ Maybe eval file
-    -> IO (Disamb c F.Tag t)
-trainOn format chain'@ChainCRF{..} split' trainPath evalPath'Maybe = do
-    crf' <- train
-        (schemed format split' trainPath)
-        (schemed format split' <$> evalPath'Maybe)
-    return $ Disamb chain' split' crf'
+    -> IO c             -- ^ Resultant model data
+trainOn format split train trainPath evalPath'Maybe = do
+    crf <- train
+        (schemed format split trainPath)
+        (schemed format split <$> evalPath'Maybe)
+    return crf
 
 -- | Schematized data from the plain file.
 schemed
