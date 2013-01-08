@@ -4,19 +4,18 @@
 
 module NLP.Concraft.Morphosyntax
 ( 
--- * Morphosyntax
+-- * Morphosyntax data
   Sent
 , Word (..)
 , mapWord
 , mapSent
 , interpsSet
 , interps
--- * Probability
-, Prob (unProb)
-, mkProb
-, mapProb
+-- * Weighted collection
+, WMap (unWMap)
+, mkWMap
+, mapWMap
 ) where
-
 
 import Control.Arrow (first)
 import qualified Data.Set as S
@@ -31,9 +30,9 @@ type Sent t = [Word t]
 data Word t = Word {
     -- | Orthographic form.
       orth      :: T.Text
-    -- | Set of word interpretations.  To each interpretation a probability
-    -- of correctness within the context is assigned.
-    , tagProb   :: Prob t
+    -- | Set of word interpretations.  To each interpretation
+    -- a "weight of correctness within the context" is assigned.
+    , tagWMap   :: WMap t
     -- | Out-of-vocabulary (OOV) word, i.e. word unknown to the
     -- morphosyntactic analyser.
     , oov       :: Bool }
@@ -41,7 +40,7 @@ data Word t = Word {
 
 -- | Map function over word tags.
 mapWord :: Ord b => (a -> b) -> Word a -> Word b
-mapWord f w = w { tagProb = mapProb f (tagProb w) }
+mapWord f w = w { tagWMap = mapWMap f (tagWMap w) }
 
 -- | Map function over sentence tags.
 mapSent :: Ord b => (a -> b) -> Sent a -> Sent b
@@ -49,33 +48,21 @@ mapSent = map . mapWord
 
 -- | Interpretations of the word.
 interpsSet :: Word t -> S.Set t
-interpsSet = M.keysSet . unProb . tagProb
+interpsSet = M.keysSet . unWMap . tagWMap
 
 -- | Interpretations of the word.
 interps :: Word t -> [t]
 interps = S.toList . interpsSet
 
 
--- | A probability distribution defined over elements of type a.
-newtype Prob a = Prob { unProb :: M.Map a Double }
+-- | A weighted collection of type @a@ elements.
+newtype WMap a = WMap { unWMap :: M.Map a Double }
     deriving (Show, Eq, Ord)
 
--- | Make a probability distribution.
-mkProb :: Ord a => [(a, Double)] -> Prob a
-mkProb =
-    Prob . normalize . M.fromListWith (+) . filter ((>=0).snd)
-  where
-    normalize dist
-        | z == 0    = error "mkProb: no elements with positive probability"
-        | otherwise =  fmap (/z) dist
-        where z = sum (M.elems dist)
+-- | Make a weighted collection.
+mkWMap :: Ord a => [(a, Double)] -> WMap a
+mkWMap = WMap . M.fromListWith (+) . filter ((>=0).snd)
 
--- | Map function over probability elements. 
-mapProb :: Ord b => (a -> b) -> Prob a -> Prob b
-mapProb f = mkProb . map (first f) . M.toList . unProb
-
--- -- | Retrieve the most probable interpretation.
--- best :: Choice t -> t
--- best c
---     | M.null c  = error "best: null choice" 
---     | otherwise = fst . maximumBy (comparing snd) $ M.toList c
+-- | Map function over weighted collection elements. 
+mapWMap :: Ord b => (a -> b) -> WMap a -> WMap b
+mapWMap f = mkWMap . map (first f) . M.toList . unWMap

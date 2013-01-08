@@ -50,34 +50,34 @@ newtype Guesser t = Guesser { crf :: CRF.CRF Ob t }
 guess :: Ord t => Int -> Schema t a -> Guesser t -> Mx.Sent t -> [[t]]
 guess k schema gsr sent = CRF.tagK k (crf gsr) (schematize schema sent)
 
--- | Include guessing results into label probability distributions
+-- | Include guessing results into weighted tag maps
 -- assigned to individual words.
-includeProbs :: Ord t => Mx.Sent t -> [[t]] -> [Mx.Prob t]
-includeProbs words guessed =
+includeWMaps :: Ord t => Mx.Sent t -> [[t]] -> [Mx.WMap t]
+includeWMaps words guessed =
     [ if Mx.oov word
-        then addInterps (Mx.tagProb word) xs
-        else Mx.tagProb word
+        then addInterps (Mx.tagWMap word) xs
+        else Mx.tagWMap word
     | (xs, word) <- zip guessed words ]
   where
     -- Add new interpretations.
-    addInterps pr xs = Mx.mkProb
-        $  M.toList (Mx.unProb pr)
+    addInterps wm xs = Mx.mkWMap
+        $  M.toList (Mx.unWMap wm)
         ++ zip xs [0, 0 ..]
 
 -- | Include guessing results into the sentence.
 include :: Ord t => Mx.Sent t -> [[t]] -> Mx.Sent t
 include words guessed =
-    [ word { Mx.tagProb = prob }
-    | (word, prob) <- zip words probs ]
+    [ word { Mx.tagWMap = wMap }
+    | (word, wMap) <- zip words wMaps ]
   where
-    probs = includeProbs words guessed
+    wMaps = includeWMaps words guessed
 
 -- | Tag sentence in external format.  Selected interpretations
 -- (tags correct within the context) will be preserved.
 guessSent :: F.Sent s w -> Int -> Schema F.Tag a -> Guesser F.Tag -> s -> s
 guessSent F.Sent{..} k schema gsr sent = flip mergeSent sent
-    [ select pr word
-    | (pr, word) <- zip probs (parseSent sent) ]
+    [ select wMap word
+    | (wMap, word) <- zip wMaps (parseSent sent) ]
   where
     -- Extract word handler.
     F.Word{..} = wordHandler
@@ -85,8 +85,8 @@ guessSent F.Sent{..} k schema gsr sent = flip mergeSent sent
     words   = map extract (parseSent sent)
     -- Guessed lists of interpretations for individual words.
     guessed = guess k schema gsr words
-    -- Resultant probability distributions. 
-    probs   = includeProbs words guessed
+    -- Resultant weighted maps. 
+    wMaps   = includeWMaps words guessed
 
 -- | Tag file.
 guessDoc
@@ -129,5 +129,5 @@ schemed F.Doc{..} schema path =
     F.Word{..} = wordHandler
     onSent sent =
         let xs = map extract (parseSent sent)
-            mkProb = CRF.mkProb . M.toList . Mx.unProb . Mx.tagProb
+            mkProb = CRF.mkProb . M.toList . Mx.unWMap . Mx.tagWMap
         in  [zip (schematize schema xs) (map mkProb xs)]

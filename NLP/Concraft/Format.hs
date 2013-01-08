@@ -22,7 +22,7 @@ data Word w = Word {
     -- | Extract information relevant for tagging.
       extract       :: w -> M.Word Tag
     -- | Select the set of morphosyntactic interpretations.
-    , select        :: M.Prob Tag -> w -> w }
+    , select        :: M.WMap Tag -> w -> w }
 
 -- | Sentence handler.
 data Sent s w = Sent {

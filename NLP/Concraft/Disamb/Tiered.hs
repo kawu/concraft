@@ -263,20 +263,3 @@ tag CRF{..} sent
     onWords xs =
         [ unJust cdc codecData word x
         | (word, x) <- zip sent xs ]
-
--- -- | Instantiation of chain CRF.
--- chainCRF
---     :: Ord t
---     => Int                          -- ^ Number of tagging layers
---     -> FeatSel Ob [Lb] Feat         -- ^ Feature selection
---     -> D.ChainCRF (CRF D.Ob t) [t]
--- chainCRF n featSel = D.ChainCRF
---     { D.tag = tag
---     , D.train = train n featSel }
--- 
--- disambConf
---     :: Ord t
---     => Int                          -- ^ Number of tagging layers
---     -> SGD.SgdArgs                  -- ^ Args for SGD
---     -> FeatSel Ob [Lb] Feat         -- ^ Feature selection
---     -> D.Disamb (CRF D.Ob t) r [t]

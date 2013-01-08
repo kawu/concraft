@@ -80,8 +80,8 @@ disambSent
     -> s -> s
 disambSent F.Sent{..} guessData disambTag sent =
   flip mergeSent sent
-    [ select prob orig
-    | (prob, orig) <- zip
+    [ select wMap orig
+    | (wMap, orig) <- zip
         (doDmb sent)
         (parseSent sent) ]
   where
@@ -90,7 +90,7 @@ disambSent F.Sent{..} guessData disambTag sent =
         let xs = map extract (parseSent orig)
         in  map (uncurry mkChoice)
                 (zip xs (disamb guessData disambTag xs))
-    mkChoice word x = Mx.mkProb
+    mkChoice word x = Mx.mkWMap
         [ if x == y
             then (x, 1)
             else (x, 0)

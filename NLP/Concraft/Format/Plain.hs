@@ -41,11 +41,11 @@ data Token = Token
     
 data Interp = Interp
     { _base     :: T.Text
-    , tag       :: T.Text }
+    , tag       :: F.Tag }
     deriving (Show, Eq, Ord)
 
 -- | Create document handler given value of the /ignore/ tag.
-plainFormat :: T.Text -> F.Doc [] [Token] Token
+plainFormat :: F.Tag -> F.Doc [] [Token] Token
 plainFormat ign = F.Doc (parsePlain ign) (showPlain ign) sentHandler
 
 -- | Sentence handler.
@@ -57,52 +57,27 @@ wordHandler :: F.Word Token
 wordHandler = F.Word extract select
 
 -- | Extract information relevant for tagging.
-extract :: Token -> Mx.Word T.Text
+extract :: Token -> Mx.Word F.Tag
 extract tok = Mx.Word
     { Mx.orth       = orth tok
-    , Mx.tagProb    = Mx.mkProb
+    , Mx.tagWMap    = Mx.mkWMap
         [ (tag x, if disamb then 1 else 0)
         | (x, disamb) <- M.toList (interps tok) ]
     , Mx.oov        = not (known tok) }
 
 -- | Select interpretations.
-select :: Mx.Prob T.Text -> Token -> Token
+select :: Mx.WMap F.Tag -> Token -> Token
 select pr tok =
     let xs = M.fromList
             [ ( Interp "None" tag
               , if x > 0 then True else False )
-            | (tag, x) <- M.toList (Mx.unProb pr) ]
+            | (tag, x) <- M.toList (Mx.unWMap pr) ]
     in  tok { interps = xs }
 
--- -- | Add new interpretations with given /disamb/ annotation.
--- addInterps :: Bool -> Token -> [Interp] -> Token
--- addInterps dmb tok xs =
---     let newIps = M.fromList [(x, dmb) | x <- xs]
---     in  tok { interps = M.unionWith max newIps (interps tok) }
--- 
--- -- | Add new interpretations with "None" base form and given
--- -- /disamb/ annotation.
--- addNones :: Bool -> Token -> [T.Text] -> Token
--- addNones dmb tok = addInterps dmb tok . map (Interp "None")
--- 
--- -- | Select interpretations with tags belonging to the given set.
--- -- Interpretations selected in the process (and only those selected)
--- -- will be marked with 'True' /disamb/ values.
--- select :: Token -> S.Set T.Text -> Token
--- select tok choice =
---     tok { interps = (M.fromList . map mark . M.keys) (interps tok) }
---   where
---     mark ip 
---         | tag ip `S.member` choice  = (ip, True) 
---         | otherwise                 = (ip, False)
-
--- readPlain :: T.Text -> FilePath -> IO [[Token]]
--- readPlain ign = fmap (parsePlain ign) . L.readFile
-
-parsePlain :: T.Text -> L.Text -> [[Token]]
+parsePlain :: F.Tag -> L.Text -> [[Token]]
 parsePlain ign = map (parseSent ign) . init . L.splitOn "\n\n"
 
-parseSent :: T.Text -> L.Text -> [Token]
+parseSent :: F.Tag -> L.Text -> [Token]
 parseSent ign
     = map (parseWord ignL)
     . groupBy (\_ x -> cond x)
@@ -152,23 +127,14 @@ parseSpace xs        = error ("parseSpace: " ++ L.unpack xs)
 (<>) = mappend
 {-# INLINE (<>) #-}
 
--- writePlain :: T.Text -> FilePath -> [[Token]] -> IO ()
--- writePlain ign path = L.writeFile path . showPlain ign 
-
-showPlain :: T.Text -> [[Token]] -> L.Text
+showPlain :: F.Tag -> [[Token]] -> L.Text
 showPlain ign =
     L.toLazyText . mconcat  . map (\xs -> buildSent ign xs <> "\n")
 
--- showSent :: T.Text -> [Token] -> L.Text
--- showSent ign = L.toLazyText . buildSent ign
--- 
--- showWord :: T.Text -> Token -> L.Text
--- showWord ign = L.toLazyText . buildWord ign
-
-buildSent :: T.Text -> [Token] -> L.Builder
+buildSent :: F.Tag -> [Token] -> L.Builder
 buildSent ign = mconcat . map (buildWord ign)
 
-buildWord :: T.Text -> Token -> L.Builder
+buildWord :: F.Tag -> Token -> L.Builder
 buildWord ign tok
     =  L.fromText (orth tok) <> "\t"
     <> buildSpace (space tok) <> "\n"
@@ -189,6 +155,6 @@ buildSpace None     = "none"
 buildSpace Space    = "space"
 buildSpace NewLine  = "newline"
 
-buildKnown :: T.Text -> Bool -> L.Builder
+buildKnown :: F.Tag -> Bool -> L.Builder
 buildKnown _ True       = ""
 buildKnown ign False    = "\tNone\t" <> L.fromText ign <> "\n"

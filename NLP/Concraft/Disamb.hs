@@ -85,8 +85,8 @@ disambSent
     -> s -> s
 disambSent F.Sent{..} schema split tag sent =
   flip mergeSent sent
-    [ select prob orig
-    | (prob, orig) <- zip
+    [ select wMap orig
+    | (wMap, orig) <- zip
         (doDmb sent)
         (parseSent sent) ]
   where
@@ -94,7 +94,7 @@ disambSent F.Sent{..} schema split tag sent =
     doDmb orig =
         let xs = map extract (parseSent orig)
         in  map (uncurry mkChoice) (zip xs (disamb schema split tag xs))
-    mkChoice word x = Mx.mkProb
+    mkChoice word x = Mx.mkWMap
         [ if x == y
             then (x, 1)
             else (x, 0)
@@ -143,4 +143,4 @@ schemed F.Doc{..} schema split path =
         [zip (schematize schema xs) (map mkDist xs)]
       where
         xs  = map (Mx.mapWord split . extract) (parseSent sent)
-        mkDist = CRF.mkDist . M.toList . Mx.unProb . Mx.tagProb
+        mkDist = CRF.mkDist . M.toList . Mx.unWMap . Mx.tagWMap
