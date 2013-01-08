@@ -125,8 +125,8 @@ trainOn format guessConf@GuessConf{..} sgdArgs DisambWith{..}
                     trainPath evalPath'Maybe
     let guessData = GuessData guessConf guesser
     let withGuesser = guessFile format guessData
-    withGuesser ".train" (Just trainPath) $ \(Just trainPathG) ->
-      withGuesser ".eval"   evalPath'Maybe  $ \evalPathG'Maybe  -> do
+    withGuesser "train" (Just trainPath) $ \(Just trainPathG) ->
+      withGuesser "eval"   evalPath'Maybe  $ \evalPathG'Maybe  -> do
         putStrLn "\n===== Train disambiguation model ====\n"
         let DisambConf{..} = disambConf
         let trainCRF = disambWith

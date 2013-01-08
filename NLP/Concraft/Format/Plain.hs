@@ -8,21 +8,6 @@
 
 module NLP.Concraft.Format.Plain
 ( plainFormat
--- -- * Types
--- , Space (..)
--- , Token (..)
--- , Interp (..)
--- 
--- -- * Parsing
--- , readPlain
--- , parsePlain
--- , parseSent
--- 
--- -- * Showing
--- , writePlain
--- , showPlain
--- , showSent
--- , showWord
 ) where
 
 import Data.Monoid (Monoid, mappend, mconcat)

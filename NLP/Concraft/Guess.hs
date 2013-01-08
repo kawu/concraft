@@ -62,7 +62,7 @@ includeProbs words guessed =
     -- Add new interpretations.
     addInterps pr xs = Mx.mkProb
         $  M.toList (Mx.unProb pr)
-        ++ zip xs [0..]
+        ++ zip xs [0, 0 ..]
 
 -- | Include guessing results into the sentence.
 include :: Ord t => Mx.Sent t -> [[t]] -> Mx.Sent t
