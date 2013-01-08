@@ -9,6 +9,8 @@ module NLP.Concraft.Morphosyntax
 , Word (..)
 , mapWord
 , mapSent
+, interpsSet
+, interps
 -- * Probability
 , Prob (unProb)
 , mkProb
@@ -17,6 +19,7 @@ module NLP.Concraft.Morphosyntax
 
 
 import Control.Arrow (first)
+import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Text as T
 
@@ -43,6 +46,15 @@ mapWord f w = w { tagProb = mapProb f (tagProb w) }
 -- | Map function over sentence tags.
 mapSent :: Ord b => (a -> b) -> Sent a -> Sent b
 mapSent = map . mapWord
+
+-- | Interpretations of the word.
+interpsSet :: Word t -> S.Set t
+interpsSet = M.keysSet . unProb . tagProb
+
+-- | Interpretations of the word.
+interps :: Word t -> [t]
+interps = S.toList . interpsSet
+
 
 -- | A probability distribution defined over elements of type a.
 newtype Prob a = Prob { unProb :: M.Map a Double }

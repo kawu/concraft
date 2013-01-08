@@ -33,11 +33,14 @@ library
       , monad-codec >= 0.2 && < 0.3
       , data-lens
       , comonad-transformers
+      , temporary
 
     exposed-modules:
-        NLP.Concraft.Morphosyntax
+        NLP.Concraft
+      , NLP.Concraft.Morphosyntax
       , NLP.Concraft.Format
       , NLP.Concraft.Format.Plain
+      , NLP.Concraft.Schema
       , NLP.Concraft.Guess
       , NLP.Concraft.Disamb
       , NLP.Concraft.Disamb.Tiered
@@ -49,16 +52,23 @@ source-repository head
     type: git
     location: https://github.com/kawu/concraft.git
 
-executable concraft-guess
-    build-depends:
-        cmdargs
-    hs-source-dirs: ., tools
-    main-is: concraft-guess.hs    
-    ghc-options: -Wall -O2 -threaded -rtsopts
+-- executable concraft-guess
+--     build-depends:
+--         cmdargs
+--     hs-source-dirs: ., tools
+--     main-is: concraft-guess.hs    
+--     ghc-options: -Wall -O2 -threaded -rtsopts
+-- 
+-- executable concraft-disamb
+--     build-depends:
+--         cmdargs
+--     hs-source-dirs: ., tools
+--     main-is: concraft-disamb.hs    
+--     ghc-options: -Wall -O2 -threaded -rtsopts
 
-executable concraft-disamb
+executable concraft
     build-depends:
         cmdargs
     hs-source-dirs: ., tools
-    main-is: concraft-disamb.hs    
+    main-is: concraft.hs    
     ghc-options: -Wall -O2 -threaded -rtsopts
