@@ -2,6 +2,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE BangPatterns #-}
 
 module NLP.Concraft.Disamb.Tiered
 (
@@ -199,9 +200,9 @@ instance F.FeatMap FeatMap Feat where
         mkArray ys =
             let p = foldl1' updateMin (map fst ys)
                 q = foldl1' updateMax (map fst ys)
-                updateMin (x, y, z) (x', y', z') =
+                updateMin (!x, !y, !z) (x', y', z') =
                     (min x x', min y y', min z z')
-                updateMax (x, y, z) (x', y', z') =
+                updateMax (!x, !y, !z) (x', y', z') =
                     (max x x', max y y', max z z')
                 zeroed pq = A.array pq [(k, dummy) | k <- range pq]
             in  zeroed (p, q) A.// ys
