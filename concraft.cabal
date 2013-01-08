@@ -12,7 +12,7 @@ author:             Jakub Waszczuk
 maintainer:         waszczuk.kuba@gmail.com
 stability:          experimental
 category:           Natural Language Processing
-homepage:           https://github.com/kawu/concraft
+homepage:           http://zil.ipipan.waw.pl/Concraft
 build-type:         Simple
 
 library
@@ -47,7 +47,7 @@ library
 
 source-repository head
     type: git
-    location: git://github.com/kawu/concraft.git
+    location: https://github.com/kawu/concraft.git
 
 executable concraft-guess
     build-depends:
