@@ -6,12 +6,6 @@ constrained conditional random fields [1].  The tool is currently adapted
 to the Polish language and resources, but the library should be applicable
 to at least other highly inflected languages.
 
-<!---
-## Library contents
-
-The concraft library contains...
--->
-
 Building Concraft
 =================
 
@@ -35,6 +29,46 @@ To install the latest development version from github just run
     cabal install
 
 from the `concraft` toplevel directory.
+
+Data format
+===========
+
+The current version of Concraft works on a simple `plain` text format which is one of the
+formats supported by the [Corpus2](http://nlp.pwr.wroc.pl/redmine/projects/corpus2/wiki)
+tools.  You can use the [Maca](http://nlp.pwr.wroc.pl/redmine/projects/libpltagger/wiki)
+tool for preliminary morphosyntactic analysis:
+
+    maca-analyse morfeusz-nkjp-official -o plain < intput.txt > output.plain
+
+Training
+========
+
+If you have the training material with disambiguation annotations you can train
+the Concraft model yourself.
+
+    concraft train config/nkjp-tagset.cfg train.plain -e eval.plain --igntag=ign -o model.bin
+
+The first program argument is a specification of the NKJP morphosyntactic tagset.
+It can be found in the `config` toplevel directory.  Run `concraft train --help`
+to learn more about the program arguments and possible training options.
+
+Remember that you can supply the program with additional
+[runtime system options](http://www.haskell.org/ghc/docs/latest/html/users_guide/runtime-control.html).
+For example, to train the model using four threads, run:
+
+    concraft train config/nkjp-tagset.cfg train.plain -e eval.plain --igntag=ign -o model.bin +RTS -N4
+
+Disambiguation
+==============
+
+Once you have the model you can use the following command to disambiguate
+the `plain` text file.
+
+    concraft tag model.bin < input.plain > output.plain
+
+*Remember to use the same preprocessing pipeline (segmentation + analysis)
+for both training and disambiguation.  Inconsistencies between training
+material and input data may severely harm the quality of disambiguation.*
 
 References
 ==========
