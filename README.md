@@ -64,7 +64,10 @@ Disambiguation
 Once you have the model you can use the following command to disambiguate
 the `plain` text file.
 
-    concraft tag model.bin < input.plain > output.plain
+    concraft disamb model.bin < input.plain > output.plain
+
+Note, that Concraft doesn't disambiguate over base forms.  As a result, there may
+be more than one disamb annotation assigned to one lexeme in the output file.
 
 *Remember to use the same preprocessing pipeline (segmentation + analysis)
 for both training and disambiguation.  Inconsistencies between training

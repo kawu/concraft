@@ -24,22 +24,22 @@ import qualified NLP.Concraft.Disamb.Tiered as R
 data Format = Plain deriving (Data, Typeable, Show)
 
 -- | Concraft data.
-data Concraft = Concraft
+data ConcraftData = ConcraftData
     { guesser       :: G.Guesser F.Tag
     , disambModel   :: R.CRF S.Ob D.Part
     , tagset        :: P.Tagset
     , tierConf      :: [D.Tier] }
 
-instance Binary Concraft where
-    put Concraft{..} = do
+instance Binary ConcraftData where
+    put ConcraftData{..} = do
         put guesser
         put disambModel
         put tagset
         put tierConf
-    get = Concraft <$> get <*> get <*> get <*> get
+    get = ConcraftData <$> get <*> get <*> get <*> get
 
-data Args
-  = TrainMode
+data Concraft
+  = Train
     { trainPath	    :: FilePath
     , evalPath      :: Maybe FilePath
     , format        :: Format
@@ -56,16 +56,15 @@ data Args
     , tau           :: Double
     , outModel      :: FilePath
     , guessNum      :: Int }
-  | TagMode
-    { dataPath      :: FilePath
-    , format        :: Format
+  | Disamb
+    { format        :: Format
     , ignTag        :: String
     , inModel       :: FilePath
     , guessNum      :: Int }
   deriving (Data, Typeable, Show)
 
-trainMode :: Args
-trainMode = TrainMode
+trainMode :: Concraft
+trainMode = Train
     { tagsetPath = def &= argPos 0 &= typ "TAGSET-PATH"
     , trainPath = def &= argPos 1 &= typ "TRAIN-FILE"
     , evalPath = def &= typFile &= help "Evaluation file"
@@ -80,34 +79,33 @@ trainMode = TrainMode
     , outModel = def &= typFile &= help "Output Model file"
     , guessNum = 10 &= help "Number of guessed tags for each unknown word" }
 
-tagMode :: Args
-tagMode = TagMode
+disambMode :: Concraft
+disambMode = Disamb
     { inModel = def &= argPos 0 &= typ "MODEL-FILE"
-    , dataPath = def &= argPos 1 &= typ "INPUT"
     , format = enum [Plain &= help "Plain format"]
     , ignTag = def &= help "Tag indicating OOV word"
     , guessNum = 10 &= help "Number of guessed tags for each unknown word" }
 
-argModes :: Mode (CmdArgs Args)
-argModes = cmdArgsMode $ modes [trainMode, tagMode]
+argModes :: Mode (CmdArgs Concraft)
+argModes = cmdArgsMode $ modes [trainMode, disambMode]
 
 main :: IO ()
 main = exec =<< cmdArgsRun argModes
 
-exec :: Args -> IO ()
+exec :: Concraft -> IO ()
 
-exec TrainMode{..} = do
+exec Train{..} = do
     tagset' <- P.parseTagset tagsetPath <$> readFile tagsetPath
     (guesser', disambModel') <- case format of
         Plain   -> doTrain (plainFormat ign) tagset'
-    let concraft = Concraft
+    let concraftData = ConcraftData
             { guesser       = guesser'
             , disambModel   = disambModel'
             , tagset        = tagset'
             , tierConf      = D.tierConfDefault }
     when (not . null $ outModel) $ do
         putStrLn $ "\nSaving model in " ++ outModel ++ "..."
-        encodeFile outModel concraft
+        encodeFile outModel concraftData
   where
     doTrain docHandler tagset' = C.trainOn
         docHandler guessConf sgdArgs
@@ -133,12 +131,12 @@ exec TrainMode{..} = do
         , SGD.gain0 = gain0
         , SGD.tau = tau }
 
-exec TagMode{..} = do
-    doTag <- doTagWith <$> decodeFile inModel <*> L.readFile dataPath
+exec Disamb{..} = do
+    doTag <- doTagWith <$> decodeFile inModel <*> L.getContents
     case format of
         Plain   -> L.putStr $ doTag (plainFormat ign)
   where
-    doTagWith Concraft{..} input docHandler =
+    doTagWith ConcraftData{..} input docHandler =
         let guessData = C.GuessData
                 { C.guessConf = C.GuessConf
                     { C.guessNum = guessNum
