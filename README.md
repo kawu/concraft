@@ -66,6 +66,7 @@ the `plain` text file.
 
     concraft disamb model.bin < input.plain > output.plain
 
+Run `concraft tag --help` to learn more about the possible disambiguation options.
 Note, that Concraft doesn't disambiguate over base forms.  As a result, there may
 be more than one disamb annotation assigned to one lexeme in the output file.
 
