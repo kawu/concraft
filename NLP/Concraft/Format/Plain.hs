@@ -10,6 +10,7 @@ module NLP.Concraft.Format.Plain
 ( plainFormat
 ) where
 
+import Control.Arrow (first)
 import Data.Monoid (Monoid, mappend, mconcat)
 import Data.Maybe (catMaybes)
 import Data.List (groupBy)
@@ -40,9 +41,12 @@ data Token = Token
     deriving (Show, Eq, Ord)
     
 data Interp = Interp
-    { _base     :: T.Text
-    , tag       :: F.Tag }
+    { base  :: Maybe T.Text
+    , tag   :: F.Tag }
     deriving (Show, Eq, Ord)
+
+noneBase :: T.Text
+noneBase = "None"
 
 -- | Create document handler given value of the /ignore/ tag.
 plainFormat :: F.Tag -> F.Doc [] [Token] Token
@@ -67,12 +71,23 @@ extract tok = Mx.Word
 
 -- | Select interpretations.
 select :: Mx.WMap F.Tag -> Token -> Token
-select pr tok =
-    let xs = M.fromList
-            [ ( Interp "None" tag
-              , if x > 0 then True else False )
-            | (tag, x) <- M.toList (Mx.unWMap pr) ]
-    in  tok { interps = xs }
+select wMap tok =
+    tok { interps = newInterps }
+  where
+    wSet = M.fromList . map (first tag) . M.toList . interps
+    asDmb x = if x > 0
+        then True
+        else False
+    newInterps = M.fromList $
+        [ case M.lookup (tag interp) (Mx.unWMap wMap) of
+            Just x  -> (interp, asDmb x)
+            Nothing -> (interp, False)
+        | interp <- M.keys (interps tok) ]
+            ++ catMaybes
+        [ if tag `M.member` wSet tok
+            then Nothing
+            else Just (Interp Nothing tag, asDmb x)
+        | (tag, x) <- M.toList (Mx.unWMap wMap) ]
 
 parsePlain :: F.Tag -> L.Text -> [[Token]]
 parsePlain ign = map (parseSent ign) . init . L.splitOn "\n\n"
@@ -106,7 +121,12 @@ parseInterp ign =
     doIt [form, tag, "disamb"] = Just $
         (mkInterp form tag, True)
     doIt xs = error $ "parseInterp: " ++ show xs
-    mkInterp form tag = Interp (L.toStrict form) (L.toStrict tag)
+    mkInterp form tag
+        | formS == noneBase = Interp Nothing tagS
+        | otherwise         = Interp (Just formS) tagS
+      where
+        formS   = L.toStrict form
+        tagS    = L.toStrict tag
 
 parseHeader :: L.Text -> (T.Text, Space)
 parseHeader xs =
@@ -143,12 +163,17 @@ buildWord ign tok
 
 buildInterps :: [(Interp, Bool)] -> L.Builder
 buildInterps interps = mconcat
-    [ "\t" <> L.fromText _base <>
-      "\t" <> L.fromText _tag <>
+    [ "\t" <> buildBase interp <>
+      "\t" <> buildTag  interp <>
       if dmb
         then "\tdisamb\n"
         else "\n"
-    | (Interp _base _tag, dmb) <- interps ]
+    | (interp, dmb) <- interps ]
+  where
+    buildTag    = L.fromText . tag
+    buildBase x = case base x of
+        Just b  -> L.fromText b
+        Nothing -> L.fromText noneBase
 
 buildSpace :: Space -> L.Builder
 buildSpace None     = "none"
@@ -156,5 +181,6 @@ buildSpace Space    = "space"
 buildSpace NewLine  = "newline"
 
 buildKnown :: F.Tag -> Bool -> L.Builder
-buildKnown _ True       = ""
-buildKnown ign False    = "\tNone\t" <> L.fromText ign <> "\n"
+buildKnown _   True     = ""
+buildKnown ign False    =  "\t" <> L.fromText noneBase
+                        <> "\t" <> L.fromText ign <> "\n"

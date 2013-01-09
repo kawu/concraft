@@ -5,6 +5,7 @@ module NLP.Concraft.Guess
 ( Guesser (..)
 , guess
 , include
+, guessSent
 , guessDoc
 , trainOn
 ) where

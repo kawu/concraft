@@ -6,6 +6,7 @@ module NLP.Concraft.Disamb
 , TrainCRF
 , TagCRF
 , disamb
+, disambSent
 , disambDoc
 , trainOn
 ) where
@@ -97,7 +98,7 @@ disambSent F.Sent{..} schema split tag sent =
     mkChoice word x = Mx.mkWMap
         [ if x == y
             then (x, 1)
-            else (x, 0)
+            else (y, 0)
         | y <- Mx.interps word ]
 
 -- | Disambiguate document.
