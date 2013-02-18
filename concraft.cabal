@@ -1,5 +1,5 @@
 name:               concraft
-version:            0.3.1
+version:            0.3.2
 synopsis:           Morphosyntactic tagging tool based on constrained CRFs
 description:
     A morphosyntactic tagging tool based on constrained conditional

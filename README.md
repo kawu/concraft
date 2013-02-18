@@ -40,13 +40,16 @@ tool for preliminary morphosyntactic analysis:
 
     maca-analyse morfeusz-nkjp-official -o plain < intput.txt > output.plain
 
+If you generate the input file yourself, make sure that every sentence is terminated
+by a blank line.
+
 Training
 ========
 
 If you have the training material with disambiguation annotations you can train
 the Concraft model yourself.
 
-    concraft train config/nkjp-tagset.cfg train.plain -e eval.plain --igntag=ign -o model.bin
+    concraft train config/nkjp-tagset.cfg train.plain -e eval.plain -o model.bin
 
 The first program argument is a specification of the NKJP morphosyntactic tagset.
 It can be found in the `config` toplevel directory.  Run `concraft train --help`
@@ -56,7 +59,7 @@ Remember that you can supply the program with additional
 [runtime system options](http://www.haskell.org/ghc/docs/latest/html/users_guide/runtime-control.html).
 For example, to train the model using four threads, run:
 
-    concraft train config/nkjp-tagset.cfg train.plain -e eval.plain --igntag=ign -o model.bin +RTS -N4
+    concraft train config/nkjp-tagset.cfg train.plain -e eval.plain -o model.bin +RTS -N4
 
 Disambiguation
 ==============

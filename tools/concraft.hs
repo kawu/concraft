@@ -69,7 +69,7 @@ trainMode = Train
     , trainPath = def &= argPos 1 &= typ "TRAIN-FILE"
     , evalPath = def &= typFile &= help "Evaluation file"
     , format = enum [Plain &= help "Plain format"]
-    , ignTag = def &= help "Tag indicating OOV word"
+    , ignTag = "ign" &= help "Tag indicating OOV word"
     , discardHidden = False &= help "Discard hidden features"
     , iterNum = 10 &= help "Number of SGD iterations"
     , batchSize = 30 &= help "Batch size"
@@ -83,7 +83,7 @@ disambMode :: Concraft
 disambMode = Disamb
     { inModel = def &= argPos 0 &= typ "MODEL-FILE"
     , format = enum [Plain &= help "Plain format"]
-    , ignTag = def &= help "Tag indicating OOV word"
+    , ignTag = "ign" &= help "Tag indicating OOV word"
     , guessNum = 10 &= help "Number of guessed tags for each unknown word" }
 
 argModes :: Mode (CmdArgs Concraft)
