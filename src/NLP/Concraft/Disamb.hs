@@ -2,11 +2,14 @@
 
 module NLP.Concraft.Disamb
 (
--- * Types
+-- * Model
   Disamb (..)
+, Tier.CRF () 
+
+-- * Tiers
 , P.Tier (..)
 , P.Atom (..)
-, Tier.CRF () 
+, P.tiersDefault
 
 -- * Disambiguation
 , disamb

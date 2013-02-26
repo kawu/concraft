@@ -5,8 +5,7 @@
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when)
 import System.Console.CmdArgs
-import Data.Binary (Binary, put, get, encodeFile, decodeFile)
-import Data.Text.Binary ()
+import Data.Binary (encodeFile, decodeFile)
 import qualified Numeric.SGD as SGD
 import qualified Data.Text as T
 import qualified Data.Text.Lazy.IO as L
@@ -15,28 +14,11 @@ import qualified Data.Tagset.Positional as P
 import NLP.Concraft.Format.Plain (plainFormat)
 import qualified NLP.Concraft as C
 import qualified NLP.Concraft.Schema as S
-import qualified NLP.Concraft.Format as F
 import qualified NLP.Concraft.Guess as G
-import qualified NLP.Concraft.Disamb.Positional as D
-import qualified NLP.Concraft.Disamb.Tiered as R
+import qualified NLP.Concraft.Disamb as D
 
 -- | Data formats. 
 data Format = Plain deriving (Data, Typeable, Show)
-
--- | Concraft data.
-data ConcraftData = ConcraftData
-    { guesser       :: G.Guesser F.Tag
-    , disambModel   :: R.CRF S.Ob D.Part
-    , tagset        :: P.Tagset
-    , tierConf      :: [D.Tier] }
-
-instance Binary ConcraftData where
-    put ConcraftData{..} = do
-        put guesser
-        put disambModel
-        put tagset
-        put tierConf
-    get = ConcraftData <$> get <*> get <*> get <*> get
 
 data Concraft
   = Train
@@ -48,7 +30,7 @@ data Concraft
     -- Try another command line parsing library?
     , tagsetPath    :: FilePath
     , ignTag        :: String
-    , discardHidden :: Bool
+    -- , discardHidden :: Bool
     , iterNum       :: Double
     , batchSize     :: Int
     , regVar        :: Double
@@ -59,8 +41,8 @@ data Concraft
   | Disamb
     { format        :: Format
     , ignTag        :: String
-    , inModel       :: FilePath
-    , guessNum      :: Int }
+    , inModel       :: FilePath }
+    -- , guessNum      :: Int }
   deriving (Data, Typeable, Show)
 
 trainMode :: Concraft
@@ -70,7 +52,7 @@ trainMode = Train
     , evalPath = def &= typFile &= help "Evaluation file"
     , format = enum [Plain &= help "Plain format"]
     , ignTag = "ign" &= help "Tag indicating OOV word"
-    , discardHidden = False &= help "Discard hidden features"
+    -- , discardHidden = False &= help "Discard hidden features"
     , iterNum = 10 &= help "Number of SGD iterations"
     , batchSize = 30 &= help "Batch size"
     , regVar = 10.0 &= help "Regularization variance"
@@ -83,8 +65,8 @@ disambMode :: Concraft
 disambMode = Disamb
     { inModel = def &= argPos 0 &= typ "MODEL-FILE"
     , format = enum [Plain &= help "Plain format"]
-    , ignTag = "ign" &= help "Tag indicating OOV word"
-    , guessNum = 10 &= help "Number of guessed tags for each unknown word" }
+    , ignTag = "ign" &= help "Tag indicating OOV word" }
+    -- , guessNum = 10 &= help "Number of guessed tags for each unknown word" }
 
 argModes :: Mode (CmdArgs Concraft)
 argModes = cmdArgsMode $ modes [trainMode, disambMode]
@@ -95,34 +77,18 @@ main = exec =<< cmdArgsRun argModes
 exec :: Concraft -> IO ()
 
 exec Train{..} = do
-    tagset' <- P.parseTagset tagsetPath <$> readFile tagsetPath
-    (guesser', disambModel') <- case format of
-        Plain   -> doTrain (plainFormat ign) tagset'
-    let concraftData = ConcraftData
-            { guesser       = guesser'
-            , disambModel   = disambModel'
-            , tagset        = tagset'
-            , tierConf      = D.tierConfDefault }
+    tagset <- P.parseTagset tagsetPath <$> readFile tagsetPath
+    concraft <- case format of
+        Plain   -> train (plainFormat ign) tagset
     when (not . null $ outModel) $ do
         putStrLn $ "\nSaving model in " ++ outModel ++ "..."
-        encodeFile outModel concraftData
+        encodeFile outModel concraft
   where
-    doTrain docHandler tagset' = C.trainOn
-        docHandler guessConf sgdArgs
-        (disambTrain tagset')
-        trainPath evalPath
-    guessConf = C.GuessConf
-        { C.guessNum = guessNum
-        , C.guessSchema = S.guessSchemaDefault }
-    disambTrain tagset' = C.DisambWith
-        { C.disambConf = disambConf tagset'
-        , C.disambWith = R.train (length D.tierConfDefault) featSel sgdArgs }
-    disambConf tagset' = C.DisambConf
-        { C.split = D.split D.tierConfDefault . P.parseTag tagset'
-        , disambSchema = S.disambSchemaDefault }
-    featSel = if discardHidden
-        then R.selectPresent
-        else R.selectHidden
+    train docH tagset =
+        let guessConf  = G.TrainConf S.guessConfDefault sgdArgs
+            disambConf = D.TrainConf tagset D.tiersDefault
+                S.disambConfDefault sgdArgs
+        in  C.train docH guessNum guessConf disambConf trainPath evalPath 
     ign = T.pack ignTag
     sgdArgs = SGD.SgdArgs
         { SGD.batchSize = batchSize
@@ -132,20 +98,9 @@ exec Train{..} = do
         , SGD.tau = tau }
 
 exec Disamb{..} = do
-    doTag <- doTagWith <$> decodeFile inModel <*> L.getContents
+    tag <- tagWith <$> decodeFile inModel <*> L.getContents
     case format of
-        Plain   -> L.putStr $ doTag (plainFormat ign)
+        Plain   -> L.putStr $ tag (plainFormat ign)
   where
-    doTagWith ConcraftData{..} input docHandler =
-        let guessData = C.GuessData
-                { C.guessConf = C.GuessConf
-                    { C.guessNum = guessNum
-                    , guessSchema = S.guessSchemaDefault }
-                , C.guesser = guesser }
-            disambTag = C.DisambWith
-                { C.disambConf = C.DisambConf
-                    { C.split = D.split tierConf . P.parseTag tagset
-                    , C.disambSchema = S.disambSchemaDefault }
-                , C.disambWith = R.tag disambModel }
-        in  C.disambDoc docHandler guessData disambTag input
+    tagWith concraft input docH = C.tagDoc docH concraft input
     ign = T.pack ignTag

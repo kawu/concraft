@@ -56,9 +56,9 @@ source-repository head
     type: git
     location: https://github.com/kawu/concraft.git
 
--- executable concraft
---     build-depends:
---         cmdargs
---     hs-source-dirs: src, tools
---     main-is: concraft.hs    
---     ghc-options: -Wall -O2 -threaded -rtsopts
+executable concraft
+    build-depends:
+        cmdargs
+    hs-source-dirs: src, tools
+    main-is: concraft.hs    
+    ghc-options: -Wall -O2 -threaded -rtsopts
