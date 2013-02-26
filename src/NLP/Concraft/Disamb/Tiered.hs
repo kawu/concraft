@@ -42,16 +42,16 @@ import Data.CRF.Chain2.Generic.Model
     , core, withCore )
 import Data.CRF.Chain2.Generic.Internal (FeatIx(..))
 import qualified Data.CRF.Chain2.Generic.Inference as I
+import qualified Data.CRF.Chain2.Generic.External as E
 import qualified Data.CRF.Chain2.Generic.Train as Train
 import qualified Data.CRF.Chain2.Generic.FeatMap as F
 import qualified Control.Monad.Codec as C
 import qualified Numeric.SGD as SGD
-import qualified NLP.Concraft.Disamb as D
 
 -- | Observation.
 newtype Ob = Ob { unOb :: Int } deriving (Show, Eq, Ord, Ix, Binary)
 
--- | [Sub]label.
+-- | Sublabel.
 newtype Lb = Lb { unLb :: Int } deriving (Show, Eq, Ord, Ix, Binary)
 
 -- | Feature.
@@ -241,7 +241,9 @@ train
     => Int                          -- ^ Number of tagging layers
     -> FeatSel Ob [Lb] Feat         -- ^ Feature selection
     -> SGD.SgdArgs                  -- ^ Args for SGD
-    -> D.TrainCRF o [t] (CRF o t)
+    -> IO [E.SentL o [t]]           -- ^ Training data 'IO' action
+    -> Maybe (IO [E.SentL o [t]])   -- ^ Maybe evalation data
+    -> IO (CRF o t)                 -- ^ Resulting model
 train n featSel sgdArgs trainIO evalIO'Maybe = do
     (_codecData, _model) <- Train.train
         sgdArgs
@@ -253,7 +255,7 @@ train n featSel sgdArgs trainIO evalIO'Maybe = do
     return $ CRF n _codecData _model
 
 -- | Find the most probable label sequence.
-tag :: (Ord o, Ord t) => CRF o t -> D.TagCRF o [t]
+tag :: (Ord o, Ord t) => CRF o t -> E.Sent o [t] -> [[t]]
 tag CRF{..} sent
     = onWords . decodeLabels cdc codecData
     . I.tag model . encodeSent cdc codecData

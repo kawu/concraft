@@ -1,18 +1,24 @@
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module NLP.Concraft.Guess
-( Guesser (..)
+(
+-- * Types
+  Guesser (..)
+ 
+-- * Guessing
 , guess
-, include
 , guessSent
 , guessDoc
-, trainOn
+, include
+
+-- * Training
+, TrainConf (..)
+, train
 ) where
 
 import Prelude hiding (words)
-import Control.Applicative ((<$>))
-import Data.Binary (Binary)
+import Control.Applicative ((<$>), (<*>))
+import Data.Binary (Binary, put, get)
 import Data.Foldable (Foldable, foldMap)
 import Data.Text.Binary ()
 import qualified Data.Set as S
@@ -25,9 +31,18 @@ import qualified Control.Monad.Ox as Ox
 import qualified Data.CRF.Chain1.Constrained as CRF
 import qualified Numeric.SGD as SGD
 
-import NLP.Concraft.Schema
+import NLP.Concraft.Schema hiding (schematize)
 import qualified NLP.Concraft.Morphosyntax as Mx
 import qualified NLP.Concraft.Format as F
+
+-- | A guessing model.
+data Guesser t = Guesser
+    { schemaConf    :: SchemaConf
+    , crf           :: CRF.CRF Ob t }
+
+instance (Ord t, Binary t) => Binary (Guesser t) where
+    put Guesser{..} = put schemaConf >> put crf
+    get = Guesser <$> get <*> get
 
 -- | Schematize the input sentence with according to 'schema' rules.
 schematize :: Ord t => Schema t a -> Mx.Sent t -> CRF.Sent Ob t
@@ -43,13 +58,11 @@ schematize schema sent =
         | otherwise = Mx.interpsSet w
         where w = v V.! i
 
--- | A guesser represented by the conditional random field.
-newtype Guesser t = Guesser { crf :: CRF.CRF Ob t }
-    deriving (Binary)
-
 -- | Determine the 'k' most probable labels for each word in the sentence.
-guess :: Ord t => Int -> Schema t a -> Guesser t -> Mx.Sent t -> [[t]]
-guess k schema gsr sent = CRF.tagK k (crf gsr) (schematize schema sent)
+guess :: Ord t => Int -> Guesser t -> Mx.Sent t -> [[t]]
+guess k gsr sent =
+    let schema = fromConf (schemaConf gsr)
+    in  CRF.tagK k (crf gsr) (schematize schema sent)
 
 -- | Include guessing results into weighted tag maps
 -- assigned to individual words.
@@ -75,8 +88,8 @@ include words guessed =
 
 -- | Tag sentence in external format.  Selected interpretations
 -- (tags correct within the context) will be preserved.
-guessSent :: F.Sent s w -> Int -> Schema F.Tag a -> Guesser F.Tag -> s -> s
-guessSent F.Sent{..} k schema gsr sent = flip mergeSent sent
+guessSent :: F.Sent s w -> Int -> Guesser F.Tag -> s -> s
+guessSent F.Sent{..} k gsr sent = flip mergeSent sent
     [ select wMap word
     | (wMap, word) <- zip wMaps (parseSent sent) ]
   where
@@ -85,7 +98,7 @@ guessSent F.Sent{..} k schema gsr sent = flip mergeSent sent
     -- Word in internal format.
     words   = map extract (parseSent sent)
     -- Guessed lists of interpretations for individual words.
-    guessed = guess k schema gsr words
+    guessed = guess k gsr words
     -- Resultant weighted maps. 
     wMaps   = includeWMaps words guessed
 
@@ -94,30 +107,34 @@ guessDoc
     :: Functor f
     => F.Doc f s w  	-- ^ Document format handler
     -> Int              -- ^ Guesser argument
-    -> Schema F.Tag a	-- ^ Observation schema
     -> Guesser F.Tag    -- ^ Guesser itself
     -> L.Text           -- ^ Input
     -> L.Text           -- ^ Output
-guessDoc F.Doc{..} k schema gsr
+guessDoc F.Doc{..} k gsr
     = showDoc 
-    . fmap (guessSent sentHandler k schema gsr)
+    . fmap (guessSent sentHandler k gsr)
     . parseDoc
 
+-- | Training configuration.
+data TrainConf = TrainConf
+    { schemaConfT   :: SchemaConf
+    , sgdArgsT      :: SGD.SgdArgs }
+
 -- | Train guesser.
-trainOn
+train
     :: Foldable f
     => F.Doc f s w      -- ^ Document format handler
-    -> Schema F.Tag a	-- ^ Observation schema
-    -> SGD.SgdArgs      -- ^ SGD parameters 
+    -> TrainConf        -- ^ Training configuration
     -> FilePath         -- ^ Training file
     -> Maybe FilePath   -- ^ Maybe eval file
     -> IO (Guesser F.Tag)
-trainOn format schema sgdArgs trainPath evalPath'Maybe = do
-    _crf <- CRF.train sgdArgs
+train format TrainConf{..} trainPath evalPath'Maybe = do
+    let schema = fromConf schemaConfT
+    crf <- CRF.train sgdArgsT
         (schemed format schema trainPath)
         (schemed format schema <$> evalPath'Maybe)
         (const CRF.presentFeats)
-    return $ Guesser _crf
+    return $ Guesser schemaConfT crf
 
 -- | Schematized data from the plain file.
 schemed

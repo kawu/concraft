@@ -1,143 +1,98 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module NLP.Concraft
-( GuessConf (..)
-, GuessData (..)
-, DisambConf (..)
-, DisambWith (..)
-, DisambTag
-, DisambTrain
-, disamb
-, disambDoc
-, trainOn
+(
+-- * Types
+  Concraft (..)
+
+-- * Tagging
+, tag
+, tagDoc
+
+-- * Training
+, train
 ) where
 
--- import Data.Binary (Binary, put, get)
--- import qualified Data.Text as T
-
 import System.IO (hClose)
+import Control.Applicative ((<$>), (<*>))
 import Data.Foldable (Foldable)
+import Data.Binary (Binary, put, get)
 import qualified Data.Text.Lazy as L
 import qualified Data.Text.Lazy.IO as L
-import qualified Numeric.SGD as SGD
 import qualified System.IO.Temp as Temp
 
-import NLP.Concraft.Schema
 import qualified NLP.Concraft.Morphosyntax as Mx
 import qualified NLP.Concraft.Format as F
 import qualified NLP.Concraft.Guess as G
 import qualified NLP.Concraft.Disamb as D
 
--- | Guessing configuration.
-data GuessConf r = GuessConf
+-- | Concraft data.
+data Concraft = Concraft
     { guessNum      :: Int
-    , guessSchema   :: Schema r () }
+    , guesser       :: G.Guesser F.Tag
+    , disamb        :: D.Disamb }
 
--- | Guessing configuration and model data.
-data GuessData r = GuessData
-    { guessConf     :: GuessConf r
-    , guesser       :: G.Guesser r }
-
--- | Disambiguation configuration.
-data DisambConf r t = DisambConf
-    { split         :: D.Split r t
-    , disambSchema  :: Schema t () }
-
--- | Disambiguation configuration with...
-data DisambWith r t a = DisambWith
-    { disambConf    :: DisambConf r t
-    , disambWith    :: a }
-
--- | Tagging with disambiguation configuration.
-type DisambTag r t = DisambWith r t (D.TagCRF Ob t)
-
--- | Training disambiguation model configuration.
-type DisambTrain r t c = DisambWith r t (D.TrainCRF Ob t c)
+instance Binary Concraft where
+    put Concraft{..} = do
+        put guessNum
+        put guesser
+        put disamb
+    get = Concraft <$> get <*> get <*> get
 
 -- | Perform disambiguation preceded by context-sensitive guessing.
-disamb
-    :: (Ord r, Ord t)
-    => GuessData r      -- ^ Guessing configuration
-    -> DisambTag r t    -- ^ Disambiguation configuration
-    -> Mx.Sent r        -- ^ Input
-    -> [r]              -- ^ Output
-disamb GuessData{..} DisambWith{..} sent
-    = D.disamb disambSchema split tagCRF
+tag :: Concraft -> Mx.Sent F.Tag -> [F.Tag]
+tag Concraft{..} sent
+    = D.disamb disamb
     . G.include sent 
-    . G.guess guessNum guessSchema guesser 
+    . G.guess guessNum guesser 
     $ sent
-  where
-    GuessConf{..}   = guessConf
-    DisambConf{..}  = disambConf
-    tagCRF          = disambWith
 
 -- | Tag the sentence.
-disambSent
-    :: Ord t
-    => F.Sent s w
-    -> GuessData F.Tag
-    -> DisambTag F.Tag t
-    -> s -> s
-disambSent sentH GuessData{..} DisambWith{..}
-    = D.disambSent sentH disambSchema split tagCRF
-    . G.guessSent  sentH guessNum guessSchema guesser
-  where
-    GuessConf{..}   = guessConf
-    DisambConf{..}  = disambConf
-    tagCRF          = disambWith
+tagSent :: F.Sent s w -> Concraft -> s -> s
+tagSent sentH Concraft{..}
+    = D.disambSent sentH disamb
+    . G.guessSent  sentH guessNum guesser
 
 -- | Tag document.
-disambDoc
-    :: (Functor f, Ord t)
-    => F.Doc f s w          -- ^ Document format handler
-    -> GuessData F.Tag      -- ^ Guessing configuration
-    -> DisambTag F.Tag t    -- ^ Disambiguation configuration
-    -> L.Text               -- ^ Input
-    -> L.Text               -- ^ Output
-disambDoc F.Doc{..} guessData disambTag  =
-    let onSent = disambSent sentHandler guessData disambTag
+tagDoc :: Functor f => F.Doc f s w -> Concraft -> L.Text -> L.Text
+tagDoc F.Doc{..} concraft =
+    let onSent = tagSent sentHandler concraft
     in  showDoc . fmap onSent . parseDoc
 
 -- | Train guessing and disambiguation models.
-trainOn
-    :: (Functor f, Foldable f, Ord t)
-    => F.Doc f s w              -- ^ Document format handler
-    -> GuessConf F.Tag          -- ^ Guessing configuration
-    -> SGD.SgdArgs              -- ^ SGD params for guesser
-    -> DisambTrain F.Tag t c    -- ^ Disambiguation configuration
-    -> FilePath                 -- ^ Training file
-    -> Maybe FilePath           -- ^ Maybe eval file
-    -> IO (G.Guesser F.Tag, c)  -- ^ Resultant models
-trainOn format guessConf@GuessConf{..} sgdArgs DisambWith{..}
-        trainPath evalPath'Maybe = do
+train
+    :: (Functor f, Foldable f)
+    => F.Doc f s w      -- ^ Document format handler
+    -> Int              -- ^ Numer of guessed tags for each word 
+    -> G.TrainConf      -- ^ Guessing model training configuration
+    -> D.TrainConf      -- ^ Disambiguation model training configuration
+    -> FilePath         -- ^ Training file
+    -> Maybe FilePath   -- ^ Maybe eval file
+    -> IO Concraft      -- ^ Resultant models
+train format guessNum guessConf disambConf trainPath evalPath'Maybe = do
     putStrLn "\n===== Train guessing model ====\n"
-    guesser <- G.trainOn format guessSchema sgdArgs
-                    trainPath evalPath'Maybe
-    let guessData = GuessData guessConf guesser
-    let withGuesser = guessFile format guessData
+    guesser <- G.train format guessConf trainPath evalPath'Maybe
+    let withGuesser = guessFile format guessNum guesser
     withGuesser "train" (Just trainPath) $ \(Just trainPathG) ->
       withGuesser "eval"   evalPath'Maybe  $ \evalPathG'Maybe  -> do
         putStrLn "\n===== Train disambiguation model ====\n"
-        let DisambConf{..} = disambConf
-        let trainCRF = disambWith
-        disambCRF <- D.trainOn format disambSchema split trainCRF
-                        trainPathG evalPathG'Maybe
-        return (guesser, disambCRF)
+        disamb <- D.train format disambConf trainPathG evalPathG'Maybe
+        return $ Concraft guessNum guesser disamb
 
 guessFile
     :: Functor f
     => F.Doc f s w              -- ^ Document format handler
-    -> GuessData F.Tag          -- ^ Guesser
+    -> Int                      -- ^ Numer of guessed tags for each word
+    -> G.Guesser F.Tag          -- ^ Guesser
     -> String                   -- ^ Template for temporary file name
     -> Maybe FilePath           -- ^ File to guess
     -> (Maybe FilePath -> IO a) -- ^ Handler
     -> IO a
-guessFile _ _ _ Nothing handler = handler Nothing
-guessFile format GuessData{..} tmpl (Just path) handler =
+guessFile _ _ _ _ Nothing handler = handler Nothing
+guessFile format guessNum gsr tmpl (Just path) handler =
     Temp.withTempFile "." tmpl $ \tmpPath tmpHandle -> do
         inp <- L.readFile path
-        let GuessConf{..} = guessConf
-        let out = G.guessDoc format guessNum guessSchema guesser inp
-	hClose tmpHandle
+        let out = G.guessDoc format guessNum gsr inp
+        hClose tmpHandle
         L.writeFile tmpPath out
         handler (Just tmpPath)
