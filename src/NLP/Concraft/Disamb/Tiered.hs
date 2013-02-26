@@ -5,19 +5,12 @@
 {-# LANGUAGE BangPatterns #-}
 
 module NLP.Concraft.Disamb.Tiered
-(
--- * Tiered model
-  Ob (..)
+( Ob (..)
 , Lb (..)
 , Feat (..)
 , CRF (..)
 , train
 , tag
-
--- * Feature selection
-, FeatSel
-, selectHidden
-, selectPresent
 ) where
 
 import Control.Applicative ((<$>), (<*>))
@@ -37,8 +30,7 @@ import Data.CRF.Chain2.Generic.Codec
     ( Codec(..), mkCodec, encodeDataL
     , encodeSent, decodeLabels, unJust )
 import Data.CRF.Chain2.Generic.Model
-    ( FeatGen(..), Model, FeatSel
-    , selectHidden, selectPresent
+    ( FeatGen(..), Model, selectHidden
     , core, withCore )
 import Data.CRF.Chain2.Generic.Internal (FeatIx(..))
 import qualified Data.CRF.Chain2.Generic.Inference as I
@@ -239,17 +231,16 @@ codecSpec n = Train.CodecSpec
 train
     :: (Ord o, Ord t)
     => Int                          -- ^ Number of tagging layers
-    -> FeatSel Ob [Lb] Feat         -- ^ Feature selection
     -> SGD.SgdArgs                  -- ^ Args for SGD
     -> IO [E.SentL o [t]]           -- ^ Training data 'IO' action
     -> Maybe (IO [E.SentL o [t]])   -- ^ Maybe evalation data
     -> IO (CRF o t)                 -- ^ Resulting model
-train n featSel sgdArgs trainIO evalIO'Maybe = do
+train n sgdArgs trainIO evalIO'Maybe = do
     (_codecData, _model) <- Train.train
         sgdArgs
         (codecSpec n)
         featGen
-        featSel
+        selectHidden
         trainIO
         evalIO'Maybe
     return $ CRF n _codecData _model

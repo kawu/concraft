@@ -4,6 +4,9 @@ module NLP.Concraft.Disamb
 (
 -- * Types
   Disamb (..)
+, P.Tier (..)
+, P.Atom (..)
+, Tier.CRF () 
 
 -- * Disambiguation
 , disamb
@@ -55,7 +58,7 @@ data Disamb = Disamb
     { tagset        :: TP.Tagset
     , tiers         :: [P.Tier]
     , schemaConf    :: SchemaConf
-    , crf           :: Tier.CRF Ob P.Part }
+    , crf           :: Tier.CRF Ob P.Atom }
 
 instance Binary Disamb where
     put Disamb{..} = put tagset >> put tiers >> put schemaConf >> put crf
@@ -119,7 +122,6 @@ data TrainConf = TrainConf
     { tagsetT       :: TP.Tagset
     , tiersT        :: [P.Tier]
     , schemaConfT   :: SchemaConf
-    , featSelT      :: Tier.FeatSel Tier.Ob [Tier.Lb] Tier.Feat
     , sgdArgsT      :: SGD.SgdArgs }
 
 -- | Train disamb model.
@@ -133,7 +135,6 @@ train
 train format TrainConf{..} trainPath evalPath'Maybe = do
     crf <- Tier.train
         (length tiersT)
-        featSelT
         sgdArgsT
         (schemed format schema split trainPath)
         (schemed format schema split <$> evalPath'Maybe)

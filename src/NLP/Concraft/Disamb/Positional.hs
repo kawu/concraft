@@ -6,7 +6,7 @@
 
 module NLP.Concraft.Disamb.Positional
 ( Tier (..)
-, Part (..)
+, Atom (..)
 , select
 , split
 , tierConfDefault
@@ -32,23 +32,23 @@ instance Binary Tier where
     get = Tier <$> get <*> get
 
 -- | An atomic part of morphosyntactic tag with optional POS.
-data Part = Part
+data Atom = Atom
     { pos   :: Maybe TP.POS
     , atts  :: M.Map TP.Attr T.Text }
     deriving (Show, Eq, Ord)
 
-instance Binary Part where
-    put Part{..} = put pos >> put atts
-    get = Part <$> get <*> get
+instance Binary Atom where
+    put Atom{..} = put pos >> put atts
+    get = Atom <$> get <*> get
 
 -- | Select tier attributes.
-select :: Tier -> TP.Tag -> Part
-select Tier{..} tag = Part
+select :: Tier -> TP.Tag -> Atom
+select Tier{..} tag = Atom
     { pos   = if withPos then Just (TP.pos tag) else Nothing
     , atts  = M.filterWithKey (\k _ -> k `S.member` withAtts) (TP.atts tag) }
 
 -- | Split the positional tag.
-split :: [Tier] -> TP.Tag -> [Part]
+split :: [Tier] -> TP.Tag -> [Atom]
 split tiers tag =
     [ select tier tag
     | tier <- tiers ]

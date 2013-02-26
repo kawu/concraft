@@ -15,7 +15,7 @@ module NLP.Concraft.Schema
 -- * Usage
 , schematize
 
--- ** Configuration
+-- * Configuration
 , Body (..)
 , Entry
 , entry
@@ -27,7 +27,7 @@ module NLP.Concraft.Schema
 , guessConfDefault
 , disambConfDefault
 
--- ** Schema blocks
+-- * Schema blocks
 , Block
 , fromBlock
 , orthB

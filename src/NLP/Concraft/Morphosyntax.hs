@@ -31,7 +31,7 @@ data Word t = Word {
     -- | Orthographic form.
       orth      :: T.Text
     -- | Set of word interpretations.  To each interpretation
-    -- a "weight of correctness within the context" is assigned.
+    -- a weight of correctness within the context is assigned.
     , tagWMap   :: WMap t
     -- | Out-of-vocabulary (OOV) word, i.e. word unknown to the
     -- morphosyntactic analyser.
