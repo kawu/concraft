@@ -16,6 +16,8 @@ homepage:           http://zil.ipipan.waw.pl/Concraft
 build-type:         Simple
 
 library
+    hs-source-dirs: src
+
     build-depends:
         base >= 4 && < 5
       , array
@@ -52,23 +54,9 @@ source-repository head
     type: git
     location: https://github.com/kawu/concraft.git
 
--- executable concraft-guess
---     build-depends:
---         cmdargs
---     hs-source-dirs: ., tools
---     main-is: concraft-guess.hs    
---     ghc-options: -Wall -O2 -threaded -rtsopts
--- 
--- executable concraft-disamb
---     build-depends:
---         cmdargs
---     hs-source-dirs: ., tools
---     main-is: concraft-disamb.hs    
---     ghc-options: -Wall -O2 -threaded -rtsopts
-
 executable concraft
     build-depends:
         cmdargs
-    hs-source-dirs: ., tools
+    hs-source-dirs: src, tools
     main-is: concraft.hs    
     ghc-options: -Wall -O2 -threaded -rtsopts
