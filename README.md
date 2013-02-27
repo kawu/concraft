@@ -57,10 +57,10 @@ to learn more about the program arguments and possible training options.
 
 Consider using [runtime system options](http://www.haskell.org/ghc/docs/latest/html/users_guide/runtime-control.html).
 You can speed up processing by making use of multiple cores by using the `-N` option.
-If the training data set is very large, try using the `-A` option, which can be used
-to increase the allocation area size used by the garbage collector.
-Another useful option,  `-s`, will produce the runtime statistics, such
-as the time spent in the garbage collector.
+The `-s` option will produce the runtime statistics, such as the time spent in the
+garbage collector.
+If the program is spending too much time collecting garbage, you can try to
+increase the allocation area size with the `-A` option.
 For example, to train the model using four threads and 1GB allocation area size, run:
 
     concraft train config/nkjp-tagset.cfg train.plain -e eval.plain -o model.bin +RTS -N4 -A1G -s
