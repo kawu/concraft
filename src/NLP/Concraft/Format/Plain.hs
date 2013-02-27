@@ -7,7 +7,19 @@
 -- unknown words.
 
 module NLP.Concraft.Format.Plain
-( plainFormat
+(
+-- * Types
+  Token (..)
+, Interp (..)
+, Space
+-- * Format handler
+, plainFormat
+-- * Parsing
+, parsePlain
+, parseSent
+-- * Printing
+, showPlain
+, showSent
 ) where
 
 import Control.Arrow (first)
@@ -89,9 +101,11 @@ select wMap tok =
             else Just (Interp Nothing tag, asDmb x)
         | (tag, x) <- M.toList (Mx.unWMap wMap) ]
 
+-- | Parse the text in the plain format given the /oov/ tag.
 parsePlain :: F.Tag -> L.Text -> [[Token]]
 parsePlain ign = map (parseSent ign) . init . L.splitOn "\n\n"
 
+-- | Parse the sentence in the plain format given the /oov/ tag.
 parseSent :: F.Tag -> L.Text -> [Token]
 parseSent ign
     = map (parseWord ignL)
@@ -141,16 +155,23 @@ parseSpace "newline" = NewLine
 parseSpace "newlines" = NewLine -- TODO: Remove this temporary fix
 parseSpace xs        = error ("parseSpace: " ++ L.unpack xs)
 
--- | Printing.
+-----------
+-- Printing
+-----------
 
 -- | An infix synonym for 'mappend'.
 (<>) :: Monoid m => m -> m -> m
 (<>) = mappend
 {-# INLINE (<>) #-}
 
+-- | Show the plain data.
 showPlain :: F.Tag -> [[Token]] -> L.Text
 showPlain ign =
     L.toLazyText . mconcat  . map (\xs -> buildSent ign xs <> "\n")
+
+-- | Show the sentence.
+showSent :: F.Tag -> [Token] -> L.Text
+showSent ign xs = L.toLazyText $ buildSent ign xs
 
 buildSent :: F.Tag -> [Token] -> L.Builder
 buildSent ign = mconcat . map (buildWord ign)
