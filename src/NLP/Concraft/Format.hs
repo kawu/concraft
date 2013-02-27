@@ -17,7 +17,7 @@ import qualified NLP.Concraft.Morphosyntax as M
 -- | Textual representation of morphposyntactic tag.
 type Tag = T.Text
 
--- | Words handler.
+-- | Word handler.
 data Word w = Word {
     -- | Extract information relevant for tagging.
       extract       :: w -> M.Word Tag

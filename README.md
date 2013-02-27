@@ -55,11 +55,15 @@ The first program argument is a specification of the NKJP morphosyntactic tagset
 It can be found in the `config` toplevel directory.  Run `concraft train --help`
 to learn more about the program arguments and possible training options.
 
-Remember that you can supply the program with additional
-[runtime system options](http://www.haskell.org/ghc/docs/latest/html/users_guide/runtime-control.html).
-For example, to train the model using four threads, run:
+Consider using [runtime system options](http://www.haskell.org/ghc/docs/latest/html/users_guide/runtime-control.html).
+You can speed up processing by making use of multiple cores by using the `-N` option.
+If the training data set is very large, try using the `-A` option, which can be used
+to increase the allocation area size used by the garbage collector.
+Another useful option,  `-s`, will produce the runtime statistics, such
+as the time spent in the garbage collector.
+For example, to train the model using four threads and 1GB allocation area size, run:
 
-    concraft train config/nkjp-tagset.cfg train.plain -e eval.plain -o model.bin +RTS -N4
+    concraft train config/nkjp-tagset.cfg train.plain -e eval.plain -o model.bin +RTS -N4 -A1G -s
 
 Disambiguation
 ==============
