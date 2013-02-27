@@ -7,6 +7,7 @@ module NLP.Concraft
 
 -- * Tagging
 , tag
+, tagSent
 , tagDoc
 
 -- * Training

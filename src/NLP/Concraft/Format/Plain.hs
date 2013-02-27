@@ -11,7 +11,7 @@ module NLP.Concraft.Format.Plain
 -- * Types
   Token (..)
 , Interp (..)
-, Space
+, Space (..)
 -- * Format handler
 , plainFormat
 -- * Parsing
