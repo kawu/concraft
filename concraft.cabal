@@ -1,13 +1,13 @@
 name:               concraft
-version:            0.4.0
-synopsis:           Morphosyntactic tagging tool based on constrained CRFs
+version:            0.5.0
+synopsis:           Morphological disambiguation based on constrained CRFs
 description:
-    A morphosyntactic tagging tool based on constrained conditional
-    random fields.
+    A morphological disambiguation library based on
+    constrained conditional random fields.
 license:            BSD3
 license-file:       LICENSE
 cabal-version:      >= 1.6
-copyright:          Copyright (c) 2011 Jakub Waszczuk, 2012 IPI PAN
+copyright:          Copyright (c) 2011 Jakub Waszczuk, 2012-2013 IPI PAN
 author:             Jakub Waszczuk
 maintainer:         waszczuk.kuba@gmail.com
 stability:          experimental
@@ -30,7 +30,7 @@ library
       , crf-chain1-constrained >= 0.1.2 && < 0.2
       , monad-ox >= 0.2 && < 0.3
       , sgd >= 0.2.2 && < 0.3
-      , tagset-positional >= 0.2 && < 0.3
+      , tagset-positional >= 0.3 && < 0.4
       , crf-chain2-generic >= 0.3 && < 0.4
       , monad-codec >= 0.2 && < 0.3
       , data-lens
@@ -42,8 +42,8 @@ library
       , NLP.Concraft.Guess
       , NLP.Concraft.Disamb
       , NLP.Concraft.Morphosyntax
-      , NLP.Concraft.Format
-      , NLP.Concraft.Format.Plain
+      -- , NLP.Concraft.Format
+      -- , NLP.Concraft.Format.Plain
       , NLP.Concraft.Schema
 
     other-modules:
@@ -56,9 +56,9 @@ source-repository head
     type: git
     location: https://github.com/kawu/concraft.git
 
-executable concraft
-    build-depends:
-        cmdargs
-    hs-source-dirs: src, tools
-    main-is: concraft.hs    
-    ghc-options: -Wall -O2 -threaded -rtsopts
+-- executable concraft
+--     build-depends:
+--         cmdargs
+--     hs-source-dirs: src, tools
+--     main-is: concraft.hs    
+--     ghc-options: -Wall -O2 -threaded -rtsopts

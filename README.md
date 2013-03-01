@@ -33,9 +33,9 @@ from the `concraft` toplevel directory.
 Data format
 ===========
 
-The current version of Concraft works on a simple `plain` text format which is one of the
-formats supported by the [Corpus2](http://nlp.pwr.wroc.pl/redmine/projects/corpus2/wiki)
-tools.  You can use the [Maca](http://nlp.pwr.wroc.pl/redmine/projects/libpltagger/wiki)
+The current version of Concraft works on a simple `plain` text format which is one of
+the formats supported by the [Corpus2](http://nlp.pwr.wroc.pl/redmine/projects/corpus2/wiki) tools.
+You can use the [Maca](http://nlp.pwr.wroc.pl/redmine/projects/libpltagger/wiki)
 tool for preliminary morphosyntactic analysis:
 
     maca-analyse morfeusz-nkjp-official -o plain < intput.txt > output.plain

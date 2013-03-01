@@ -29,18 +29,19 @@ type Sent t = [Word t]
 -- | A word parametrized over a tag type.
 data Word t = Word {
     -- | Orthographic form.
-      orth      :: T.Text
+      orth  :: T.Text
     -- | Set of word interpretations.  To each interpretation
-    -- a weight of correctness within the context is assigned.
-    , tagWMap   :: WMap t
+    -- a weight of appropriateness within the context
+    -- is assigned.
+    , tags  :: WMap t
     -- | Out-of-vocabulary (OOV) word, i.e. word unknown to the
     -- morphosyntactic analyser.
-    , oov       :: Bool }
+    , oov   :: Bool }
     deriving (Show, Eq, Ord)
 
 -- | Map function over word tags.
 mapWord :: Ord b => (a -> b) -> Word a -> Word b
-mapWord f w = w { tagWMap = mapWMap f (tagWMap w) }
+mapWord f w = w { tags = mapWMap f (tags w) }
 
 -- | Map function over sentence tags.
 mapSent :: Ord b => (a -> b) -> Sent a -> Sent b
@@ -48,14 +49,14 @@ mapSent = map . mapWord
 
 -- | Interpretations of the word.
 interpsSet :: Word t -> S.Set t
-interpsSet = M.keysSet . unWMap . tagWMap
+interpsSet = M.keysSet . unWMap . tags
 
 -- | Interpretations of the word.
 interps :: Word t -> [t]
 interps = S.toList . interpsSet
 
 
--- | A weighted collection of type @a@ elements.
+-- | A set with additional weight assigned to each element.
 newtype WMap a = WMap { unWMap :: M.Map a Double }
     deriving (Show, Eq, Ord)
 
