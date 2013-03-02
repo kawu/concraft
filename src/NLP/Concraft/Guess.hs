@@ -81,25 +81,24 @@ data TrainConf = TrainConf
 -- | Train guesser.
 train
     :: Ord t
-    => (FilePath -> IO [X.Sent t])  -- ^ Data parsing IO action
-    -> TrainConf                    -- ^ Training configuration
-    -> FilePath                     -- ^ Training file
-    -> Maybe FilePath               -- ^ Maybe eval file
+    => TrainConf            -- ^ Training configuration
+    -> [X.Sent t]           -- ^ Training data
+    -> Maybe [X.Sent t]     -- ^ Maybe evaluation data
     -> IO (Guesser t)
-train parseIO TrainConf{..} trainPath evalPath'Maybe = do
+train TrainConf{..} trainData evalData'Maybe = do
     let schema = fromConf schemaConfT
     crf <- CRF.train sgdArgsT
-        (schemed parseIO schema trainPath)
-        (schemed parseIO schema <$> evalPath'Maybe)
+        (retSchemed schema trainData)
+        (retSchemed schema <$> evalData'Maybe)
         (const CRF.presentFeats)
     return $ Guesser schemaConfT crf
+  where
+    retSchemed schema = return . schemed schema
 
 -- | Schematized data from the plain file.
-schemed
-    :: Ord t => (FilePath -> IO [X.Sent t])
-    -> Schema t a -> FilePath -> IO [CRF.SentL Ob t]
-schemed parseIO schema path =
-    map onSent <$> parseIO path
+schemed :: Ord t => Schema t a -> [X.Sent t] -> [CRF.SentL Ob t]
+schemed schema =
+    map onSent
   where
     onSent xs =
         let mkProb = CRF.mkProb . M.toList . X.unWMap . X.tags

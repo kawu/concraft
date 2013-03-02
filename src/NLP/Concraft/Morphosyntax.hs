@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 -- | Types and functions related to the morphosyntax data layer.
 
@@ -21,10 +22,11 @@ module NLP.Concraft.Morphosyntax
 , sync
 ) where
 
-import Control.Applicative ((<$>), (<|>))
+import Control.Applicative ((<$>), (<*>), (<|>))
 import Control.Arrow (first)
 import Data.Maybe (fromJust)
 import Data.List (find)
+import Data.Binary (Binary, put, get)
 import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Char as C
@@ -55,6 +57,13 @@ data Seg t = Seg {
     , oov   :: Bool }
     deriving (Show, Eq, Ord)
 
+instance (Ord t, Binary t) => Binary (Seg t) where
+    put Seg{..} = do
+        put orth
+        put tags
+        put oov 
+    get = Seg <$> get <*> get <*> get
+
 -- | Map function over segment tags.
 mapSeg :: Ord b => (a -> b) -> Seg a -> Seg b
 mapSeg f w = w { tags = mapWMap f (tags w) }
@@ -74,7 +83,7 @@ interps = S.toList . interpsSet
 -- | A set with a non-negative weight assigned to each of
 -- its elements.
 newtype WMap a = WMap { unWMap :: M.Map a Double }
-    deriving (Show, Eq, Ord)
+    deriving (Show, Eq, Ord, Binary)
 
 -- | Make a weighted collection.  Negative elements will be ignored.
 mkWMap :: Ord a => [(a, Double)] -> WMap a

@@ -34,8 +34,10 @@ library
       , crf-chain2-generic >= 0.3 && < 0.4
       , monad-codec >= 0.2 && < 0.3
       , data-lens
+      , transformers
       , comonad-transformers
       , temporary
+      , errors >= 1.4 && < 1.5
 
     exposed-modules:
         NLP.Concraft
