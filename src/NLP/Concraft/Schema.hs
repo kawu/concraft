@@ -48,18 +48,18 @@ import qualified Data.Text as T
 import qualified Control.Monad.Ox as Ox
 import qualified Control.Monad.Ox.Text as Ox
 
-import qualified NLP.Concraft.Morphosyntax as Mx
+import qualified NLP.Concraft.Morphosyntax as X
 
 -- | An observation consist of an index (of list type) and an actual
 -- observation value.
 type Ob = ([Int], T.Text)
 
 -- | The Ox monad specialized to word token type and text observations.
-type Ox t a = Ox.Ox (Mx.Word t) T.Text a
+type Ox t a = Ox.Ox (X.Seg t) T.Text a
 
 -- | A schema is a block of the Ox computation performed within the
 -- context of the sentence and the absolute sentence position.
-type Schema t a = V.Vector (Mx.Word t) -> Int -> Ox t a
+type Schema t a = V.Vector (X.Seg t) -> Int -> Ox t a
 
 -- | A dummy schema block.
 void :: a -> Schema t a
@@ -67,8 +67,8 @@ void x _ _ = return x
 
 -- | Sequence the list of schemas (or blocks) and discard individual values.
 sequenceS_
-    :: [V.Vector (Mx.Word t) -> a -> Ox t b]
-    ->  V.Vector (Mx.Word t) -> a -> Ox t ()
+    :: [V.Vector (X.Seg t) -> a -> Ox t b]
+    ->  V.Vector (X.Seg t) -> a -> Ox t ()
 sequenceS_ xs sent =
     let ys = map ($sent) xs
     in  \k -> sequence_ (map ($k) ys)
@@ -79,18 +79,18 @@ data BaseOb = BaseOb
     , lowOrth       :: Int -> Maybe T.Text }
 
 -- | Construct the 'BaseOb' structure given the sentence.
-mkBaseOb :: V.Vector (Mx.Word t) -> BaseOb
+mkBaseOb :: V.Vector (X.Seg t) -> BaseOb
 mkBaseOb sent = BaseOb
     { orth      = _orth
     , lowOrth   = _lowOrth }
   where
     at          = Ox.atWith sent
-    _orth       = (Mx.orth `at`)
+    _orth       = (X.orth `at`)
     _lowOrth i  = T.toLower <$> _orth i
 
 -- | A block is a chunk of the Ox computation performed within the
 -- context of the sentence and the list of absolute sentence positions.
-type Block t a = V.Vector (Mx.Word t) -> [Int] -> Ox t a
+type Block t a = V.Vector (X.Seg t) -> [Int] -> Ox t a
 
 -- | Transform a block to a schema depending on
 -- * A list of relative sentence positions,
@@ -104,13 +104,13 @@ fromBlock blk xs oovOnly sent =
     blkSent = blk sent
     oov k   = if not oovOnly
         then True
-        else maybe False id $ Mx.oov `at` k
+        else maybe False id $ X.oov `at` k
     at      = Ox.atWith sent
 
 -- | Orthographic form at the current position.
 orthB :: Block t ()
 orthB sent = \ks ->
-    let orthOb = Ox.atWith sent Mx.orth
+    let orthOb = Ox.atWith sent X.orth
     in  mapM_ (Ox.save . orthOb) ks
 
 -- | Orthographic form at the current position.
@@ -143,7 +143,7 @@ knownB sent = \ks -> do
     mapM_ (Ox.save . knownAt) ks
   where
     at          = Ox.atWith sent
-    knownAt i   = boolF <$> (not . Mx.oov) `at` i
+    knownAt i   = boolF <$> (not . X.oov) `at` i
     boolF True  = "T"
     boolF False = "F"
 
@@ -292,14 +292,6 @@ fromConf SchemaConf{..} = sequenceS_
     , mkArg0 packedB packedC
     , mkArg0 begPackedB begPackedC ]
 
--- -- | Use the schema to extract observations from the sentence.
--- schematize :: Schema t a -> [Mx.Word t] -> CRF.Sent Ob
--- schematize schema xs =
---     map (S.fromList . Ox.execOx . schema v) [0 .. n - 1]
---   where
---     v = V.fromList xs
---     n = V.length v
-
 ---------------------------------
 -- Default schema configurations.
 ---------------------------------
@@ -321,12 +313,12 @@ guessConfDefault = nullConf
 --     Ox.save (isBeg k <> pure "-" <> shapeP k)
 --   where
 --     at          = Ox.atWith sent
---     lowOrth i   = T.toLower <$> Mx.orth `at` i
+--     lowOrth i   = T.toLower <$> X.orth `at` i
 --     lowPref i j = Ox.prefix j =<< lowOrth i
 --     lowSuff i j = Ox.suffix j =<< lowOrth i
---     shape i     = Ox.shape <$> Mx.orth `at` i
+--     shape i     = Ox.shape <$> X.orth `at` i
 --     shapeP i    = Ox.pack <$> shape i
---     knownAt i   = boolF <$> (not . Mx.oov) `at` i
+--     knownAt i   = boolF <$> (not . X.oov) `at` i
 --     isBeg i     = (Just . boolF) (i == 0)
 --     boolF True  = "T"
 --     boolF False = "F"
@@ -347,17 +339,17 @@ disambConfDefault = nullConf
 -- disambSchemaDefault :: Schema t ()
 -- disambSchemaDefault sent = \k -> do
 --     mapM_ (Ox.save . lowOrth) [k - 1, k, k + 1]
---     _ <- Ox.whenJT (Mx.oov `at` k) $ do
+--     _ <- Ox.whenJT (X.oov `at` k) $ do
 --         mapM_ (Ox.save . lowPref k) [1, 2, 3]
 --         mapM_ (Ox.save . lowSuff k) [1, 2, 3]
 --         Ox.save (isBeg k <> pure "-" <> shapeP k)
 --     return ()
 --   where
 --     at          = Ox.atWith sent
---     lowOrth i   = T.toLower <$> Mx.orth `at` i
+--     lowOrth i   = T.toLower <$> X.orth `at` i
 --     lowPref i j = Ox.prefix j =<< lowOrth i
 --     lowSuff i j = Ox.suffix j =<< lowOrth i
---     shape i     = Ox.shape <$> Mx.orth `at` i
+--     shape i     = Ox.shape <$> X.orth `at` i
 --     shapeP i    = Ox.pack <$> shape i
 --     isBeg i     = (Just . boolF) (i == 0)
 --     boolF True  = "T"
@@ -365,7 +357,7 @@ disambConfDefault = nullConf
 --     x <> y      = T.append <$> x <*> y
 
 -- | Use the schema to extract observations from the sentence.
-schematize :: Schema t a -> Mx.Sent t -> [[Ob]]
+schematize :: Schema t a -> X.Sent t -> [[Ob]]
 schematize schema xs =
     map (Ox.execOx . schema v) [0 .. n - 1]
   where

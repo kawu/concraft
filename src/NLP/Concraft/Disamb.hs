@@ -63,7 +63,7 @@ instance Binary Disamb where
 
 -- | Unsplit the complex tag (assuming, that it is one
 -- of the interpretations of the word).
-unSplit :: Eq t => (r -> t) -> X.Word r -> t -> r
+unSplit :: Eq t => (r -> t) -> X.Seg r -> t -> r
 unSplit split' word x = fromJust $ find ((==x) . split') (X.interps word)
 
 -- | Perform context-sensitive disambiguation.
@@ -123,6 +123,6 @@ schemed parseIO schema split path =
     map onSent <$> parseIO path
   where
     onSent sent =
-        let xs  = map (X.mapWord split) sent
+        let xs  = map (X.mapSeg split) sent
             mkDist = CRF.mkDist . M.toList . X.unWMap . X.tags
         in  zip (schematize schema xs) (map mkDist xs)
