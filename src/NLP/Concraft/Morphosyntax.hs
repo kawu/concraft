@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 -- | Types and functions related to the morphosyntax data layer.
 
@@ -16,14 +17,19 @@ module NLP.Concraft.Morphosyntax
 , mapWMap
 , mkWMap
 -- * Alignment and synchronization
-, match
+, align
+, sync
 ) where
 
+import Control.Applicative ((<$>), (<|>))
 import Control.Arrow (first)
+import Data.Maybe (fromJust)
+import Data.List (find)
 import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Char as C
 import qualified Data.Text as T
+import qualified Data.Tagset.Positional as P
 
 --------------------------
 -- Morphosyntax data layer
@@ -82,46 +88,61 @@ mapWMap f = mkWMap . map (first f) . M.toList . unWMap
 -- Alignment and synchronization
 --------------------------------
 
--- -- | Synchronize two datasets, taking disamb tags from the first one
--- -- and the rest of information form the second one.
--- sync :: P.Tagset -> [Seg] -> [Seg] -> [Seg]
--- sync tagset xs ys = concatMap (uncurry (syncWord tagset)) (align xs ys)
--- 
--- syncWord :: Tagset -> [Seg] -> [Seg] -> [Seg]
--- syncWord tagset [v] [w] =
---     [Disamb (word w) mlt]
---   where
---     mlt = mergeMulti (interps $ word w) (choice v)
---     mergeMulti xs = concatMap (mergeDisamb xs)
---     mergeDisamb xs (x, pr)
---         | Just x' <- find ( ==x) xs = [(x', pr)]    -- ^ Exact match
---         | Just x' <- find (~==x) xs = [(x', pr)]    -- ^ Expanded tag match
---         | otherwise                 = [(x , pr)]    -- ^ Controversial
---       where
---         x ~== y = S.size (label x `S.intersection` label y) > 0
---         label   = S.fromList . expand tagset . tag
--- syncWord tagset xs ys = xs
--- 
--- align :: [Seg] -> [Seg] -> [([Seg], [Seg])]
--- align [] [] = []
--- align [] ys = error "align: null xs, not null ys"
--- align xs [] = error "align: not null xs, null ys"
--- align xs ys =
---     let (x, y) = match xs ys
---     in  (x, y) : align (drop (length x) xs) (drop (length y) ys)
+-- | Synchronize two datasets, taking disamb tags from the first one
+-- and the rest of information form the second one.
+sync :: P.Tagset -> [Seg P.Tag] -> [Seg P.Tag] -> Either String [Seg P.Tag]
+sync tagset xs ys = do
+    zs <- align xs ys
+    return $ concatMap (uncurry (moveDisamb tagset)) zs
 
--- | Find the shortest, length-matching prefixes of the two input lists.
-match :: [Seg t] -> [Seg t] -> ([Seg t], [Seg t])
-match xs ys =
-    doIt 0 xs 0 ys
+-- | If both arguments contain only one segment, insert disamb interpretations
+-- from the first segment into the second segment.  Otherwise, the first list
+-- of segments will be returned unchanged.
+moveDisamb :: P.Tagset -> [Seg P.Tag] -> [Seg P.Tag] -> [Seg P.Tag]
+moveDisamb tagset [v] [w] =
+    [w {tags = mkWMap (map (,0) tagsNew ++ disambNew)}]
+  where
+    -- Return list of (tag, weight) pairs assigned to the segment.
+    tagPairs    = M.toList . unWMap . tags
+    -- New tags domain.
+    tagsNew     = map fst (tagPairs w)
+    -- Disamb list with tags mapped to the new domain.
+    disambNew   = [(newDom x, c) | (x, c) <- tagPairs v, c > 0]
+    -- Find corresonding tag in the new tags domain.
+    newDom tag  = fromJust $
+            find ( ==tag) tagsNew   -- Exact match
+        <|> find (~==tag) tagsNew   -- Expanded tag match
+        <|> Just tag                -- Controversial
+      where
+        x ~== y = S.size (label x `S.intersection` label y) > 0
+        label   = S.fromList . P.expand tagset
+-- Do nothing in this case.
+moveDisamb _ xs _ = xs
+
+-- | Align two lists of segments.
+align :: [Seg t] -> [Seg t] -> Either String [([Seg t], [Seg t])]
+align [] [] = Right []
+align [] _  = Left "align: null xs, not null ys"
+align _  [] = Left "align: not null xs, null ys"
+align xs ys = do
+    (x, y) <- match xs ys
+    rest   <- align (drop (length x) xs) (drop (length y) ys)
+    return $ (x, y) : rest
+
+-- | Find the shortest, length-matching prefixes in the two input lists.
+match :: [Seg t] -> [Seg t] -> Either String ([Seg t], [Seg t])
+match xs' ys' =
+    doIt 0 xs' 0 ys'
   where
     doIt i (x:xs) j (y:ys)
-        | n == m = ([x], [y])
-        | n <  m = x <: doIt n xs j (y:ys)
-        | n >  m = y >: doIt i (x:xs) m ys
+        | n == m    = Right ([x], [y])
+        | n <  m    = addL x <$> doIt n xs j (y:ys)
+        | otherwise = addR y <$> doIt i (x:xs) m ys
       where
         n = i + size x
         m = j + size y
+    doIt _ [] _ _   = Left "match: the first argument is null"
+    doIt _ _  _ []  = Left "match: the second argument is null"
     size w = T.length . T.filter (not.C.isSpace) $ orth w
-    x <: (xs, ys) = (x:xs, ys)
-    y >: (xs, ys) = (xs, y:ys)
+    addL x (xs, ys) = (x:xs, ys)
+    addR y (xs, ys) = (xs, y:ys)
