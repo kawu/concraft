@@ -14,6 +14,7 @@ module NLP.Concraft.Disamb
 -- * Disambiguation
 , disamb
 , include
+, disambSent
 
 -- * Training
 , TrainConf (..)
@@ -91,6 +92,10 @@ include f sent =
         [ (y, if x == y then 1 else 0)
         | y <- X.interps word ]
 
+-- | Combine `disamb` with `include`. 
+disambSent :: Disamb -> X.Sent T.Tag -> X.Sent T.Tag
+disambSent = include . disamb
+
 -- | Training configuration.
 data TrainConf = TrainConf
     { tiersT        :: [P.Tier]
@@ -99,28 +104,27 @@ data TrainConf = TrainConf
 
 -- | Train disamb model.
 train
-    :: (FilePath -> IO [X.Sent T.Tag])  -- ^ Data parsing IO action
-    -> TrainConf                        -- ^ Training configuration
-    -> FilePath                         -- ^ Training file
-    -> Maybe FilePath                   -- ^ Maybe eval file
+    :: TrainConf                        -- ^ Training configuration
+    -> [X.Sent T.Tag]                   -- ^ Training data
+    -> Maybe [X.Sent T.Tag]             -- ^ Maybe evaluation data
     -> IO Disamb                        -- ^ Resultant model
-train parseIO TrainConf{..} trainPath evalPath'Maybe = do
+train TrainConf{..} trainData evalData'Maybe = do
     crf <- Tier.train
         (length tiersT)
         sgdArgsT
-        (schemed parseIO schema split trainPath)
-        (schemed parseIO schema split <$> evalPath'Maybe)
+        (retSchemed schema split trainData)
+        (retSchemed schema split <$> evalData'Maybe)
     return $ Disamb tiersT schemaConfT crf
   where
+    retSchemed sc sp = return . schemed sc sp 
     schema = fromConf schemaConfT
     split  = P.split tiersT
 
 -- | Schematized data from the plain file.
 schemed
-    :: Ord t => (FilePath -> IO [X.Sent T.Tag]) -> Schema t a
-    -> (T.Tag -> t) -> FilePath -> IO [CRF.SentL Ob t]
-schemed parseIO schema split path =
-    map onSent <$> parseIO path
+    :: Ord t => Schema t a -> (T.Tag -> t) -> [X.Sent T.Tag] -> [CRF.SentL Ob t]
+schemed schema split =
+    map onSent
   where
     onSent sent =
         let xs  = map (X.mapSeg split) sent

@@ -99,10 +99,8 @@ mapWMap f = mkWMap . map (first f) . M.toList . unWMap
 
 -- | Synchronize two datasets, taking disamb tags from the first one
 -- and the rest of information form the second one.
-sync :: P.Tagset -> [Seg P.Tag] -> [Seg P.Tag] -> Either String [Seg P.Tag]
-sync tagset xs ys = do
-    zs <- align xs ys
-    return $ concatMap (uncurry (moveDisamb tagset)) zs
+sync :: P.Tagset -> [Seg P.Tag] -> [Seg P.Tag] -> [Seg P.Tag]
+sync tagset xs ys = concatMap (uncurry (moveDisamb tagset)) (align xs ys)
 
 -- | If both arguments contain only one segment, insert disamb interpretations
 -- from the first segment into the second segment.  Otherwise, the first list
@@ -129,29 +127,29 @@ moveDisamb tagset [v] [w] =
 moveDisamb _ xs _ = xs
 
 -- | Align two lists of segments.
-align :: [Seg t] -> [Seg t] -> Either String [([Seg t], [Seg t])]
-align [] [] = Right []
-align [] _  = Left "align: null xs, not null ys"
-align _  [] = Left "align: not null xs, null ys"
-align xs ys = do
-    (x, y) <- match xs ys
-    rest   <- align (drop (length x) xs) (drop (length y) ys)
-    return $ (x, y) : rest
+align :: [Seg t] -> [Seg t] -> [([Seg t], [Seg t])]
+align [] [] = []
+align [] _  = error "align: null xs, not null ys"
+align _  [] = error "align: not null xs, null ys"
+align xs ys =
+    let (x, y) = match xs ys
+        rest   = align (drop (length x) xs) (drop (length y) ys)
+    in  (x, y) : rest
 
 -- | Find the shortest, length-matching prefixes in the two input lists.
-match :: [Seg t] -> [Seg t] -> Either String ([Seg t], [Seg t])
+match :: [Seg t] -> [Seg t] -> ([Seg t], [Seg t])
 match xs' ys' =
     doIt 0 xs' 0 ys'
   where
     doIt i (x:xs) j (y:ys)
-        | n == m    = Right ([x], [y])
-        | n <  m    = addL x <$> doIt n xs j (y:ys)
-        | otherwise = addR y <$> doIt i (x:xs) m ys
+        | n == m    = ([x], [y])
+        | n <  m    = addL x $ doIt n xs j (y:ys)
+        | otherwise = addR y $ doIt i (x:xs) m ys
       where
         n = i + size x
         m = j + size y
-    doIt _ [] _ _   = Left "match: the first argument is null"
-    doIt _ _  _ []  = Left "match: the second argument is null"
+    doIt _ [] _ _   = error "match: the first argument is null"
+    doIt _ _  _ []  = error "match: the second argument is null"
     size w = T.length . T.filter (not.C.isSpace) $ orth w
     addL x (xs, ys) = (x:xs, ys)
     addR y (xs, ys) = (xs, y:ys)

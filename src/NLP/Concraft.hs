@@ -5,26 +5,21 @@ module NLP.Concraft
 -- * Types
   Concraft (..)
 , Analyse
+, Elem (..)
 
 -- * Tagging
 , tag
--- , tagSent
--- , tagDoc
 
 -- * Training
--- , train
+, train
 ) where
 
 import System.IO (hClose)
 import Control.Applicative ((<$>), (<*>))
-import Data.Traversable (Traversable)
-import Data.Char (isSpace)
-import Data.Binary (Binary, put, get)
-import Control.Monad.Trans.Class (lift)
-import qualified Control.Error as E
+import Data.Maybe (fromJust)
+import Data.Binary (Binary, put, get, encodeFile, decodeFile)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
-import qualified Data.Text.Lazy.IO as L
 import qualified System.IO.Temp as Temp
 
 import qualified Data.Tagset.Positional as P
@@ -54,17 +49,25 @@ type Analyse = L.Text -> [X.Sent P.Tag]
 -- | Perform morphlogical tagging on the input text.
 tag :: Analyse -> Concraft -> L.Text -> [X.Sent P.Tag]
 tag analyse Concraft{..} =
-    let doTag = D.include (D.disamb disamb)
-              . G.include (G.guess guessNum guesser)
+    let doTag = D.disambSent disamb . G.guessSent guessNum guesser
     in  map doTag . analyse
 
 -- | A dataset element.  Original sentence is needed to perform
 -- reanalysis of the data.
+-- TODO: Sentence doesn't have to be a full-fledged `X.Sent`.  In particular,
+-- it doesn't have to contain morphosyntactic analysis results, just a list
+-- of words and chosen interpretations (tags).
 data Elem = Elem
     { sent  :: X.Sent P.Tag
     , orig  :: T.Text }
 
 -- | Train guessing and disambiguation models.
+-- TODO: Its probably a good idea to take an input dataset as a list, since
+-- it is read only once.  On the other hand, we loose a chance to handle
+-- errors generated during dataset parsing.  So, perhaps pipes would be
+-- better?  Besides, even when a user uses plain lists as a representation
+-- of datasets, they can be easily transormed into pipes.
+-- TODO: Use some legible format to store temporary files, for users sake.
 train
     :: P.Tagset         -- ^ Tagset
     -> Analyse          -- ^ Analysis function
@@ -73,51 +76,52 @@ train
     -> D.TrainConf      -- ^ Disambiguation model training configuration
     -> [Elem]           -- ^ Training data
     -> Maybe [Elem]     -- ^ Maybe evaluation data
-    -> E.Script Concraft
-train tagset ana guessNum guessConf disambConf train eval'Maybe = do
-    E.scriptIO $ putStrLn "\n===== Reanalysis ====\n"
-    -- TODO: Since we are catching errors here, the trainR list will be
-    -- evaluated here.  We would like to avoid this, the trainR list
-    -- should be generated lazily.
-    trainR <- E.hoistEither $ reanalyse tagset ana train
-    evalR'Maybe <- case eval'Maybe of
-        Just eval   -> Just <$> E.hoistEither (reanalyse tagset ana eval)
-        Nothing     -> return Nothing
+    -> IO Concraft
+train tagset ana guessNum guessConf disambConf train0 eval0 = do
+    putStrLn "\n===== Reanalysis ====\n"
+    let trainR = reanalyse tagset ana train0
+        evalR  = case eval0 of
+            Just ev -> Just $ reanalyse tagset ana ev
+            Nothing -> Nothing
+    withTemp "train" trainR $ \trainR'IO -> do
+    withTemp' "eval" evalR  $ \evalR'IO  -> do
 
-    E.scriptIO $ putStrLn "\n===== Train guessing model ====\n"
-    guesser <- E.scriptIO $ G.train guessConf trainR evalR'Maybe
-    E.left "done"
+    putStrLn "\n===== Train guessing model ====\n"
+    guesser <- do
+        tr <- trainR'IO
+        ev <- evalR'IO
+        G.train guessConf tr ev
+    trainG <-       map (G.guessSent guessNum guesser)  <$> trainR'IO
+    evalG  <- fmap (map (G.guessSent guessNum guesser)) <$> evalR'IO
 
---     let withGuesser = guessFile format guessNum guesser
---     withGuesser "train" (Just trainPath) $ \(Just trainPathG) ->
---       withGuesser "eval"   evalPath'Maybe  $ \evalPathG'Maybe  -> do
---         putStrLn "\n===== Train disambiguation model ====\n"
---         disamb <- D.train format disambConf trainPathG evalPathG'Maybe
---         return $ Concraft guessNum guesser disamb
+    putStrLn "\n===== Train disambiguation model ====\n"
+    disamb <- D.train disambConf trainG evalG
+    return $ Concraft tagset guessNum guesser disamb
 
--- guessFile
---     :: Functor d
---     => F.Doc d s w              -- ^ Document format handler
---     -> Int                      -- ^ Numer of guessed tags for each word
---     -> G.Guesser P.Tag          -- ^ Guesser
---     -> String                   -- ^ Template for temporary file name
---     -> Maybe FilePath           -- ^ File to guess
---     -> (Maybe FilePath -> IO a) -- ^ Handler
---     -> IO a
--- guessFile _ _ _ _ Nothing handler = handler Nothing
--- guessFile format guessNum gsr tmpl (Just path) handler =
---     Temp.withTempFile "." tmpl $ \tmpPath tmpHandle -> do
---         inp <- L.readFile path
---         let out = G.guessDoc format guessNum gsr inp
---         hClose tmpHandle
---         L.writeFile tmpPath out
---         handler (Just tmpPath)
+-- | Store dataset on a disk and run a handler on a lazy list which is read
+-- directly from the disk.  A temporary file will be automatically
+-- deleted after the handler is done.
+-- TODO: Try using pipes instead of lazy IO (input being a pipe as well?).
+withTemp
+    :: String                               -- ^ Template name for `Temp.withTempFile` function
+    -> [X.Sent P.Tag]                       -- ^ Input dataset
+    -> (IO [X.Sent P.Tag] -> IO a)          -- ^ Handler
+    -> IO a
+withTemp tmpl xs handler = withTemp' tmpl (Just xs) (handler . fmap fromJust)
+
+-- | The same as `withTemp` but on a `Maybe` dataset.
+withTemp' :: String -> Maybe [X.Sent P.Tag] -> (IO (Maybe [X.Sent P.Tag]) -> IO a) -> IO a
+withTemp' tmpl (Just xs) handler = Temp.withTempFile "." tmpl $ \tmpPath tmpHandle -> do
+    hClose tmpHandle
+    encodeFile tmpPath xs
+    handler (decodeFile tmpPath)
+withTemp' _ Nothing handler = handler (return Nothing)
 
 -- | Reanalyse the dataset.
-reanalyse :: P.Tagset -> Analyse -> [Elem] -> Either String [X.Sent P.Tag]
-reanalyse tagset ana elems = do
-    segments <- X.sync tagset (concat gold) (concat reana)
-    return $ chunk (map length reana) segments
+reanalyse :: P.Tagset -> Analyse -> [Elem] -> [X.Sent P.Tag]
+reanalyse tagset ana elems = chunk
+   (map length reana)
+   (X.sync tagset (concat gold) (concat reana))
   where
     gold    = map sent elems
     reana   = ana $ L.fromChunks $ map orig elems
@@ -129,3 +133,4 @@ chunk (n:ns) xs =
     let (first, rest) = splitAt n xs 
     in  first : chunk ns rest
 chunk [] [] = []
+chunk [] _  = error "chunk: absurd"

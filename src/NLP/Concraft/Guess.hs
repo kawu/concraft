@@ -8,6 +8,7 @@ module NLP.Concraft.Guess
 -- * Guessing
 , guess
 , include
+, guessSent
 
 -- * Training
 , TrainConf (..)
@@ -72,6 +73,10 @@ include f sent =
     addInterps wm xs = X.mkWMap
         $  M.toList (X.unWMap wm)
         ++ zip xs [0, 0 ..]
+
+-- | Combine `guess` with `include`. 
+guessSent :: Ord t => Int -> Guesser t -> X.Sent t -> X.Sent t
+guessSent guessNum guesser = include (guess guessNum guesser)
 
 -- | Training configuration.
 data TrainConf = TrainConf
