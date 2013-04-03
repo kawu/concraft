@@ -6,17 +6,20 @@
 
 module NLP.Concraft.Morphosyntax
 ( 
--- * Basic types
--- ** Sentence
-  Sent
-, SentO (..)
-, mapSent
-, mapSentO
--- ** Segment
-, Seg (..)
+-- * Segment
+  Seg (..)
 , mapSeg
 , interpsSet
 , interps
+
+-- * Space
+, Space (unSpace)
+, mkSpace
+
+-- * Sentence
+, Sent
+, mapSent
+, restore
 
 -- * Conversion
 , segTag
@@ -46,30 +49,8 @@ import qualified Data.Text as T
 import qualified Data.Tagset.Positional as P
 
 --------------------------
--- Morphosyntax data layer
+-- Segment
 --------------------------
-
--- | A sentence. 
-type Sent t = [Seg t]
-
--- | A sentence with its original, textual representation.
--- TODO: For the sake of training, SentO doesn't have to be a full-fledged
--- sentence.  In particular, it doesn't have to contain morphosyntactic
--- analysis results, just a list of words and chosen interpretations (tags).
--- However, maybe it is not necessary to change the type?
-data SentO t = SentO
-    { sent  :: Sent t
-    , orig  :: T.Text }
-
--- | Map function over sentence tags.
-mapSent :: Ord b => (a -> b) -> Sent a -> Sent b
-mapSent = map.mapSeg
-
--- | Map function over sentence tags.
-mapSentO :: Ord b => (a -> b) -> SentO a -> SentO b
-mapSentO f x =
-    let s = mapSent f (sent x)
-    in  x { sent = s }
 
 -- | A segment parametrized over a tag type.
 data Seg t = Seg {
@@ -81,7 +62,9 @@ data Seg t = Seg {
     , tags  :: WMap t
     -- | Out-of-vocabulary (OOV) segment, i.e. segment unknown to the
     -- morphosyntactic analyser.
-    , oov   :: Bool }
+    , oov   :: Bool
+    -- | Info about space(s) before the segment.
+    , space :: Space }
     deriving (Show, Eq, Ord)
 
 instance (Ord t, Binary t) => Binary (Seg t) where
@@ -89,7 +72,8 @@ instance (Ord t, Binary t) => Binary (Seg t) where
         put orth
         put tags
         put oov 
-    get = Seg <$> get <*> get <*> get
+        put space
+    get = Seg <$> get <*> get <*> get <*> get
 
 -- | Map function over segment tags.
 mapSeg :: Ord b => (a -> b) -> Seg a -> Seg b
@@ -102,6 +86,36 @@ interpsSet = M.keysSet . unWMap . tags
 -- | Interpretations of the segment.
 interps :: Seg t -> [t]
 interps = S.toList . interpsSet
+
+----------------------
+-- Space
+----------------------
+
+newtype Space = Space { unSpace :: T.Text }
+    deriving (Show, Eq, Ord, Binary)
+
+-- | Smart `Space` constructor. 
+mkSpace :: T.Text -> Space
+mkSpace x
+    | T.all C.isSpace x = Space x
+    | otherwise         = error "mkSpace: not a space"
+
+----------------------
+-- Sentence
+----------------------
+
+-- | A sentence.
+type Sent t = [Seg t]
+
+-- | Map function over sentence tags.
+mapSent :: Ord b => (a -> b) -> Sent a -> Sent b
+mapSent = map . mapSeg
+
+-- | Restore original, textual representation of a sentence.
+restore :: Sent t -> T.Text
+restore =
+    let toStr Seg{..} = unSpace space `T.append` orth
+    in  T.concat . map toStr
 
 ----------------------
 -- Weighted collection

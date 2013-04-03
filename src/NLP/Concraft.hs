@@ -9,6 +9,7 @@ module NLP.Concraft
 -- * Tagging
 , tag
 , tagSent
+, tagPar
 
 -- * Training
 , train
@@ -44,17 +45,20 @@ instance Binary Concraft where
 
 -- | An analyser performs segmentation (paragraph-, sentence- and token-level)
 -- and morphological analysis.
-type Analyse = L.Text -> [X.Sent P.Tag]
+type Analyse = L.Text -> [[X.Sent P.Tag]]
 
 -- | Perform morphlogical tagging on the input text.
-tag :: Analyse -> Concraft -> L.Text -> [X.Sent P.Tag]
-tag analyse concraft = map (tagSent concraft) . analyse
+tag :: Analyse -> Concraft -> L.Text -> [[X.Sent P.Tag]]
+tag analyse concraft = map (tagPar concraft) . analyse
 
--- | Perform morphlogical disambiguation on the input data.
--- Same as `tag`, but assumes that analysis is already done.
+-- Tag sentence.  The function doesn't perform reanalysis.
 tagSent :: Concraft -> X.Sent P.Tag -> X.Sent P.Tag
 tagSent Concraft{..} =
     D.disambSent disamb . G.guessSent guessNum guesser
+
+-- Tag paragraph.  The function doesn't perform reanalysis.
+tagPar :: Concraft -> [X.Sent P.Tag] -> [X.Sent P.Tag]
+tagPar = map . tagSent
 
 -- | Train guessing and disambiguation models.
 trainNoAna
@@ -94,8 +98,8 @@ train
     -> Int              -- ^ Numer of guessed tags for each word 
     -> G.TrainConf      -- ^ Guessing model training configuration
     -> D.TrainConf      -- ^ Disambiguation model training configuration
-    -> [X.SentO P.Tag]  -- ^ Training data
-    -> Maybe [X.SentO P.Tag]    -- ^ Maybe evaluation data
+    -> [X.Sent P.Tag]   -- ^ Training data
+    -> Maybe [X.Sent P.Tag]    -- ^ Maybe evaluation data
     -> IO Concraft
 train tagset ana guessNum guessConf disambConf train0 eval0 = do
     putStrLn "\n===== Reanalysis ====\n"
@@ -141,14 +145,13 @@ withTemp' tmpl (Just xs) handler =
     handler (decodeFile tmpPath)
 withTemp' _ Nothing handler = handler (return Nothing)
 
--- | Reanalyse the dataset.
-reanalyse :: P.Tagset -> Analyse -> [X.SentO P.Tag] -> [X.Sent P.Tag]
-reanalyse tagset ana elems = chunk
-   (map length reana)
-   (X.sync tagset (concat gold) (concat reana))
+-- | Reanalyse paragraph.
+reanalyse :: P.Tagset -> Analyse -> [X.Sent P.Tag] -> [X.Sent P.Tag]
+reanalyse tagset ana gold = chunk
+    (map length reana)
+    (X.sync tagset (concat gold) (concat reana))
   where
-    gold    = map X.sent elems
-    reana   = ana $ L.fromChunks $ map X.orig elems
+    reana = concat . ana . L.fromChunks . map X.restore $ gold
 
 -- | Divide the list into a list of chunks given the list of
 -- lengths of individual chunks.
