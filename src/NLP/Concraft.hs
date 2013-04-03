@@ -82,7 +82,7 @@ anaRestore ana inp =
 -- | Tag sentence using the model.  In your code you should probably
 -- use your analysis function, translate results into a container of
 -- `X.Sent`ences, evaluate `tagSent` on each sentence and embed the
--- tagging results into morphosyntax structure of your own.
+-- tagging results into morphosyntactic structure of your own.
 tag :: (X.HasOOV w, X.HasOrth w) => Concraft -> X.Sent w P.Tag -> [P.Tag]
 tag Concraft{..} = D.disamb disamb . G.guessSent guessNum guesser
 
