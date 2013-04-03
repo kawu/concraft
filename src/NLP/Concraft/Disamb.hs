@@ -40,7 +40,7 @@ import qualified Data.Tagset.Positional as T
 import qualified Numeric.SGD as SGD
 
 -- | Schematize the input sentence with according to 'schema' rules.
-schematize :: Schema t a -> X.Sent t -> CRF.Sent Ob t
+schematize :: Schema w t a -> X.Sent w t -> CRF.Sent Ob t
 schematize schema sent =
     [ CRF.mkWord (obs i) (lbs i)
     | i <- [0 .. n - 1] ]
@@ -63,11 +63,11 @@ instance Binary Disamb where
 
 -- | Unsplit the complex tag (assuming, that it is one
 -- of the interpretations of the word).
-unSplit :: Eq t => (r -> t) -> X.Seg r -> t -> r
+unSplit :: Eq t => (r -> t) -> X.Seg w r -> t -> r
 unSplit split' word x = fromJust $ find ((==x) . split') (X.interps word)
 
 -- | Perform context-sensitive disambiguation.
-disamb :: Disamb -> X.Sent T.Tag -> [T.Tag]
+disamb :: (X.HasOOV w, X.HasOrth w) => Disamb -> X.Sent w T.Tag -> [T.Tag]
 disamb Disamb{..} sent
     = map (uncurry embed)
     . zip sent
@@ -81,7 +81,7 @@ disamb Disamb{..} sent
     embed   = unSplit split
 
 -- | Insert disambiguation results into the sentence.
-include :: (X.Sent T.Tag -> [T.Tag]) -> X.Sent T.Tag -> X.Sent T.Tag
+include :: (X.Sent w T.Tag -> [T.Tag]) -> X.Sent w T.Tag -> X.Sent w T.Tag
 include f sent =
     [ word { X.tags = tags }
     | (word, tags) <- zip sent sentTags ]
@@ -92,7 +92,8 @@ include f sent =
         | y <- X.interps word ]
 
 -- | Combine `disamb` with `include`. 
-disambSent :: Disamb -> X.Sent T.Tag -> X.Sent T.Tag
+disambSent :: (X.HasOOV w, X.HasOrth w) => Disamb
+           -> X.Sent w T.Tag -> X.Sent w T.Tag
 disambSent = include . disamb
 
 -- | Training configuration.
@@ -103,9 +104,10 @@ data TrainConf = TrainConf
 
 -- | Train disamb model.
 train
-    :: TrainConf                        -- ^ Training configuration
-    -> [X.Sent T.Tag]                   -- ^ Training data
-    -> Maybe [X.Sent T.Tag]             -- ^ Maybe evaluation data
+    :: (X.HasOOV w, X.HasOrth w)
+    => TrainConf                        -- ^ Training configuration
+    -> [X.Sent w T.Tag]                 -- ^ Training data
+    -> Maybe [X.Sent w T.Tag]           -- ^ Maybe evaluation data
     -> IO Disamb                        -- ^ Resultant model
 train TrainConf{..} trainData evalData'Maybe = do
     crf <- Tier.train
@@ -120,8 +122,8 @@ train TrainConf{..} trainData evalData'Maybe = do
     split  = P.split tiersT
 
 -- | Schematized data from the plain file.
-schemed
-    :: Ord t => Schema t a -> (T.Tag -> t) -> [X.Sent T.Tag] -> [CRF.SentL Ob t]
+schemed :: Ord t => Schema w t a -> (T.Tag -> t)
+        -> [X.Sent w T.Tag] -> [CRF.SentL Ob t]
 schemed schema split =
     map onSent
   where

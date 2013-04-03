@@ -1,5 +1,4 @@
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 -- | Types and functions related to the morphosyntax data layer.
@@ -12,110 +11,101 @@ module NLP.Concraft.Morphosyntax
 , interpsSet
 , interps
 
--- * Space
-, Space (unSpace)
-, mkSpace
+-- * Word classes
+, HasOrth (..)
+, HasOOV (..)
 
 -- * Sentence
 , Sent
 , mapSent
-, restore
 
--- * Conversion
-, segTag
-, segText
-, sentTag
-, sentText
+-- -- * Conversion
+-- , segTag
+-- , segText
+-- , sentTag
+-- , sentText
 
 -- * Weighted collection
 , WMap (unWMap)
 , mapWMap
 , mkWMap
-
--- * Alignment and synchronization
-, align
-, sync
 ) where
 
-import Control.Applicative ((<$>), (<*>), (<|>))
+import Control.Applicative ((<$>), (<*>))
 import Control.Arrow (first)
-import Data.Maybe (fromJust)
-import Data.List (find)
 import Data.Binary (Binary, put, get)
 import qualified Data.Set as S
 import qualified Data.Map as M
-import qualified Data.Char as C
 import qualified Data.Text as T
-import qualified Data.Tagset.Positional as P
 
 --------------------------
 -- Segment
 --------------------------
 
--- | A segment parametrized over a tag type.
-data Seg t = Seg {
-    -- | Orthographic form.
-      orth  :: T.Text
-    -- | Set of segment interpretations.  To each interpretation
+-- | A segment parametrized over a word type and a tag type.
+data Seg w t = Seg {
+    -- | A word represented by the segment.
+      word  :: w
+    -- | A set of interpretations.  To each interpretation
     -- a weight of appropriateness within the context
     -- is assigned.
-    , tags  :: WMap t
-    -- | Out-of-vocabulary (OOV) segment, i.e. segment unknown to the
-    -- morphosyntactic analyser.
-    , oov   :: Bool
-    -- | Info about space(s) before the segment.
-    , space :: Space }
-    deriving (Show, Eq, Ord)
+    , tags  :: WMap t }
+    deriving (Show)
 
-instance (Ord t, Binary t) => Binary (Seg t) where
+instance (Binary w, Ord t, Binary t) => Binary (Seg w t) where
     put Seg{..} = do
-        put orth
+        put word
         put tags
-        put oov 
-        put space
-    get = Seg <$> get <*> get <*> get <*> get
+    get = Seg <$> get <*> get
 
 -- | Map function over segment tags.
-mapSeg :: Ord b => (a -> b) -> Seg a -> Seg b
+mapSeg :: Ord b => (a -> b) -> Seg w a -> Seg w b
 mapSeg f w = w { tags = mapWMap f (tags w) }
 
 -- | Interpretations of the segment.
-interpsSet :: Seg t -> S.Set t
+interpsSet :: Seg w t -> S.Set t
 interpsSet = M.keysSet . unWMap . tags
 
 -- | Interpretations of the segment.
-interps :: Seg t -> [t]
+interps :: Seg w t -> [t]
 interps = S.toList . interpsSet
 
-----------------------
--- Space
-----------------------
+--------------------------
+-- Word classes
+--------------------------
 
-newtype Space = Space { unSpace :: T.Text }
-    deriving (Show, Eq, Ord, Binary)
+-- | Orthographic form.
+class HasOrth a where
+    orth :: a -> T.Text 
 
--- | Smart `Space` constructor. 
-mkSpace :: T.Text -> Space
-mkSpace x
-    | T.all C.isSpace x = Space x
-    | otherwise         = error "mkSpace: not a space"
+instance HasOrth w => HasOrth (Seg w t) where
+    orth = orth . word
+    {-# INLINE orth #-}
+    
+-- | Out-of-vocabulary (OOV) word.
+class HasOOV a where
+    oov :: a -> Bool
+
+instance HasOOV w => HasOOV (Seg w t) where
+    oov = oov . word
+    {-# INLINE oov #-}
 
 ----------------------
 -- Sentence
 ----------------------
 
 -- | A sentence.
-type Sent t = [Seg t]
+type Sent w t = [Seg w t]
 
 -- | Map function over sentence tags.
-mapSent :: Ord b => (a -> b) -> Sent a -> Sent b
+mapSent :: Ord b => (a -> b) -> Sent w a -> Sent w b
 mapSent = map . mapSeg
 
--- | Restore original, textual representation of a sentence.
-restore :: Sent t -> T.Text
-restore =
-    let toStr Seg{..} = unSpace space `T.append` orth
-    in  T.concat . map toStr
+-- -- | Restore original, textual representation of a sentence.
+-- restore :: Sent t -> T.Text
+-- restore =
+--     let toStr Seg{..} = unSpace space `T.append` orth
+--     in  T.concat . map toStr
 
 ----------------------
 -- Weighted collection
@@ -134,83 +124,22 @@ mkWMap = WMap . M.fromListWith (+) . filter ((>=0).snd)
 mapWMap :: Ord b => (a -> b) -> WMap a -> WMap b
 mapWMap f = mkWMap . map (first f) . M.toList . unWMap
 
---------------------------
--- Conversion
---------------------------
-
--- | Parse segment tags.
-segTag :: P.Tagset -> Seg T.Text -> Seg P.Tag
-segTag tagset = mapSeg (P.parseTag tagset)
-
--- | Show segment tags.
-segText :: P.Tagset -> Seg P.Tag -> Seg T.Text
-segText tagset = mapSeg (P.showTag tagset)
-
--- | Parse sentence tags.
-sentTag :: P.Tagset -> Sent T.Text -> Sent P.Tag
-sentTag = map . segTag
-
--- | Show sentence tags.
-sentText :: P.Tagset -> Sent P.Tag -> Sent T.Text
-sentText = map . segText
-
---------------------------------
--- Alignment and synchronization
---------------------------------
-
--- | Synchronize two datasets, taking disamb tags from the first one
--- and the rest of information form the second one.
-sync :: P.Tagset -> [Seg P.Tag] -> [Seg P.Tag] -> [Seg P.Tag]
-sync tagset xs ys = concatMap (uncurry (moveDisamb tagset)) (align xs ys)
-
--- | If both arguments contain only one segment, insert disamb interpretations
--- from the first segment into the second segment.  Otherwise, the first list
--- of segments will be returned unchanged.
-moveDisamb :: P.Tagset -> [Seg P.Tag] -> [Seg P.Tag] -> [Seg P.Tag]
-moveDisamb tagset [v] [w] =
-    [w {tags = mkWMap (map (,0) tagsNew ++ disambNew)}]
-  where
-    -- Return list of (tag, weight) pairs assigned to the segment.
-    tagPairs    = M.toList . unWMap . tags
-    -- New tags domain.
-    tagsNew     = map fst (tagPairs w)
-    -- Disamb list with tags mapped to the new domain.
-    disambNew   = [(newDom x, c) | (x, c) <- tagPairs v, c > 0]
-    -- Find corresonding tag in the new tags domain.
-    newDom tag  = fromJust $
-            find ( ==tag) tagsNew   -- Exact match
-        <|> find (~==tag) tagsNew   -- Expanded tag match
-        <|> Just tag                -- Controversial
-      where
-        x ~== y = S.size (label x `S.intersection` label y) > 0
-        label   = S.fromList . P.expand tagset
--- Do nothing in this case.
-moveDisamb _ xs _ = xs
-
--- | Align two lists of segments.
-align :: [Seg t] -> [Seg t] -> [([Seg t], [Seg t])]
-align [] [] = []
-align [] _  = error "align: null xs, not null ys"
-align _  [] = error "align: not null xs, null ys"
-align xs ys =
-    let (x, y) = match xs ys
-        rest   = align (drop (length x) xs) (drop (length y) ys)
-    in  (x, y) : rest
-
--- | Find the shortest, length-matching prefixes in the two input lists.
-match :: [Seg t] -> [Seg t] -> ([Seg t], [Seg t])
-match xs' ys' =
-    doIt 0 xs' 0 ys'
-  where
-    doIt i (x:xs) j (y:ys)
-        | n == m    = ([x], [y])
-        | n <  m    = addL x $ doIt n xs j (y:ys)
-        | otherwise = addR y $ doIt i (x:xs) m ys
-      where
-        n = i + size x
-        m = j + size y
-    doIt _ [] _ _   = error "match: the first argument is null"
-    doIt _ _  _ []  = error "match: the second argument is null"
-    size w = T.length . T.filter (not.C.isSpace) $ orth w
-    addL x (xs, ys) = (x:xs, ys)
-    addR y (xs, ys) = (xs, y:ys)
+-- --------------------------
+-- -- Conversion
+-- --------------------------
+-- 
+-- -- | Parse segment tags.
+-- segTag :: P.Tagset -> Seg T.Text -> Seg P.Tag
+-- segTag tagset = mapSeg (P.parseTag tagset)
+-- 
+-- -- | Show segment tags.
+-- segText :: P.Tagset -> Seg P.Tag -> Seg T.Text
+-- segText tagset = mapSeg (P.showTag tagset)
+-- 
+-- -- | Parse sentence tags.
+-- sentTag :: P.Tagset -> Sent T.Text -> Sent P.Tag
+-- sentTag = map . segTag
+-- 
+-- -- | Show sentence tags.
+-- sentText :: P.Tagset -> Sent P.Tag -> Sent T.Text
+-- sentText = map . segText

@@ -40,7 +40,7 @@ instance (Ord t, Binary t) => Binary (Guesser t) where
     get = Guesser <$> get <*> get
 
 -- | Schematize the input sentence with according to 'schema' rules.
-schematize :: Ord t => Schema t a -> X.Sent t -> CRF.Sent Ob t
+schematize :: (X.HasOOV w, Ord t) => Schema w t a -> X.Sent w t -> CRF.Sent Ob t
 schematize schema sent =
     [ CRF.Word (obs i) (lbs i)
     | i <- [0 .. n - 1] ]
@@ -54,13 +54,15 @@ schematize schema sent =
         where w = v V.! i
 
 -- | Determine 'k' most probable labels for each word in the sentence.
-guess :: Ord t => Int -> Guesser t -> X.Sent t -> [[t]]
+guess :: (X.HasOOV w, X.HasOrth w, Ord t)
+      => Int -> Guesser t -> X.Sent w t -> [[t]]
 guess k gsr sent =
     let schema = fromConf (schemaConf gsr)
     in  CRF.tagK k (crf gsr) (schematize schema sent)
 
 -- | Insert guessing results into the sentence.
-include :: Ord t => (X.Sent t -> [[t]]) -> X.Sent t -> X.Sent t
+include :: (X.HasOOV w, Ord t) => (X.Sent w t -> [[t]])
+        -> X.Sent w t -> X.Sent w t
 include f sent =
     [ word { X.tags = tags }
     | (word, tags) <- zip sent sentTags ]
@@ -75,7 +77,8 @@ include f sent =
         ++ zip xs [0, 0 ..]
 
 -- | Combine `guess` with `include`. 
-guessSent :: Ord t => Int -> Guesser t -> X.Sent t -> X.Sent t
+guessSent :: (X.HasOOV w, X.HasOrth w, Ord t)
+          => Int -> Guesser t -> X.Sent w t -> X.Sent w t
 guessSent guessNum guesser = include (guess guessNum guesser)
 
 -- | Training configuration.
@@ -85,10 +88,10 @@ data TrainConf = TrainConf
 
 -- | Train guesser.
 train
-    :: Ord t
+    :: (X.HasOrth w, X.HasOOV w, Ord t)
     => TrainConf            -- ^ Training configuration
-    -> [X.Sent t]           -- ^ Training data
-    -> Maybe [X.Sent t]     -- ^ Maybe evaluation data
+    -> [X.Sent w t]         -- ^ Training data
+    -> Maybe [X.Sent w t]   -- ^ Maybe evaluation data
     -> IO (Guesser t)
 train TrainConf{..} trainData evalData'Maybe = do
     let schema = fromConf schemaConfT
@@ -101,7 +104,8 @@ train TrainConf{..} trainData evalData'Maybe = do
     retSchemed schema = return . schemed schema
 
 -- | Schematized data from the plain file.
-schemed :: Ord t => Schema t a -> [X.Sent t] -> [CRF.SentL Ob t]
+schemed :: (X.HasOOV w, Ord t) => Schema w t a
+        -> [X.Sent w t] -> [CRF.SentL Ob t]
 schemed schema =
     map onSent
   where

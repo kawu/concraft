@@ -50,6 +50,7 @@ library
     other-modules:
         NLP.Concraft.Disamb.Tiered
       , NLP.Concraft.Disamb.Positional
+      , NLP.Concraft.Morphosyntax.Align
 
     ghc-options: -Wall -O2
 
