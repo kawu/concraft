@@ -3,7 +3,7 @@
 
 -- | Simple format for morphosyntax representation which
 -- assumes that all tags have a textual representation
--- with no spaces inside and that one of the tags indicates
+-- with no spaces within and that one of the tags indicates
 -- unknown words.
 
 module NLP.Concraft.Format.Plain

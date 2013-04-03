@@ -9,7 +9,6 @@ module NLP.Concraft.Disamb.Positional
 , Atom (..)
 , select
 , split
-, tiersDefault
 ) where
 
 import Control.Applicative ((<$>), (<*>))
@@ -52,13 +51,3 @@ split :: [Tier] -> TP.Tag -> [Atom]
 split tiers tag =
     [ select tier tag
     | tier <- tiers ]
-
--- | Default tiered tagging configuration.
-tiersDefault :: [Tier]
-tiersDefault =
-    [tier1, tier2]
-  where
-    tier1 = Tier True $ S.fromList ["cas", "per"]
-    tier2 = Tier False $ S.fromList
-        [ "nmb", "gnd", "deg", "asp" , "ngt", "acm"
-        , "acn", "ppr", "agg", "vlc", "dot" ]

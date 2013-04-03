@@ -24,9 +24,6 @@ module NLP.Concraft.Schema
 , nullConf
 , fromConf
 
-, guessConfDefault
-, disambConfDefault
-
 -- * Schema blocks
 , Block
 , fromBlock
@@ -291,70 +288,6 @@ fromConf SchemaConf{..} = sequenceS_
     , mkArg0 shapeB shapeC
     , mkArg0 packedB packedC
     , mkArg0 begPackedB begPackedC ]
-
----------------------------------
--- Default schema configurations.
----------------------------------
-
--- | Default configuration for the guessing observation schema.
-guessConfDefault :: SchemaConf
-guessConfDefault = nullConf
-    { lowPrefixesC  = entryWith [1, 2]      [0]
-    , lowSuffixesC  = entryWith [1, 2]      [0]
-    , knownC        = entry                 [0]
-    , begPackedC    = entry                 [0] }
-
--- -- | Default guessing schema.
--- guessSchemaDefault :: Schema t ()
--- guessSchemaDefault sent = \k -> do
---     mapM_ (Ox.save . lowPref k) [1, 2]
---     mapM_ (Ox.save . lowSuff k) [1, 2]
---     Ox.save (knownAt k)
---     Ox.save (isBeg k <> pure "-" <> shapeP k)
---   where
---     at          = Ox.atWith sent
---     lowOrth i   = T.toLower <$> X.orth `at` i
---     lowPref i j = Ox.prefix j =<< lowOrth i
---     lowSuff i j = Ox.suffix j =<< lowOrth i
---     shape i     = Ox.shape <$> X.orth `at` i
---     shapeP i    = Ox.pack <$> shape i
---     knownAt i   = boolF <$> (not . X.oov) `at` i
---     isBeg i     = (Just . boolF) (i == 0)
---     boolF True  = "T"
---     boolF False = "F"
---     x <> y      = T.append <$> x <*> y
-
--- | Default configuration for the guessing observation schema.
-disambConfDefault :: SchemaConf
-disambConfDefault = nullConf
-    { lowOrthC      = entry                         [-1, 0, 1]
-    , lowPrefixesC  = oov $ entryWith [1, 2, 3]     [0]
-    , lowSuffixesC  = oov $ entryWith [1, 2, 3]     [0]
-    , begPackedC    = oov $ entry                   [0] }
-  where
-    oov (Just body) = Just $ body { oovOnly = True }
-    oov Nothing     = Nothing
-
--- -- | Default disambiguation schema.
--- disambSchemaDefault :: Schema t ()
--- disambSchemaDefault sent = \k -> do
---     mapM_ (Ox.save . lowOrth) [k - 1, k, k + 1]
---     _ <- Ox.whenJT (X.oov `at` k) $ do
---         mapM_ (Ox.save . lowPref k) [1, 2, 3]
---         mapM_ (Ox.save . lowSuff k) [1, 2, 3]
---         Ox.save (isBeg k <> pure "-" <> shapeP k)
---     return ()
---   where
---     at          = Ox.atWith sent
---     lowOrth i   = T.toLower <$> X.orth `at` i
---     lowPref i j = Ox.prefix j =<< lowOrth i
---     lowSuff i j = Ox.suffix j =<< lowOrth i
---     shape i     = Ox.shape <$> X.orth `at` i
---     shapeP i    = Ox.pack <$> shape i
---     isBeg i     = (Just . boolF) (i == 0)
---     boolF True  = "T"
---     boolF False = "F"
---     x <> y      = T.append <$> x <*> y
 
 -- | Use the schema to extract observations from the sentence.
 schematize :: Schema t a -> X.Sent t -> [[Ob]]

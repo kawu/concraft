@@ -5,20 +5,20 @@ module NLP.Concraft
 -- * Types
   Concraft (..)
 , Analyse
-, Elem (..)
 
 -- * Tagging
 , tag
+, tagSent
 
 -- * Training
 , train
+, trainNoAna
 ) where
 
 import System.IO (hClose)
 import Control.Applicative ((<$>), (<*>))
 import Data.Maybe (fromJust)
 import Data.Binary (Binary, put, get, encodeFile, decodeFile)
-import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
 import qualified System.IO.Temp as Temp
 
@@ -48,18 +48,38 @@ type Analyse = L.Text -> [X.Sent P.Tag]
 
 -- | Perform morphlogical tagging on the input text.
 tag :: Analyse -> Concraft -> L.Text -> [X.Sent P.Tag]
-tag analyse Concraft{..} =
-    let doTag = D.disambSent disamb . G.guessSent guessNum guesser
-    in  map doTag . analyse
+tag analyse concraft = map (tagSent concraft) . analyse
 
--- | A dataset element.  Original sentence is needed to perform
--- reanalysis of the data.
--- TODO: Sentence doesn't have to be a full-fledged `X.Sent`.  In particular,
--- it doesn't have to contain morphosyntactic analysis results, just a list
--- of words and chosen interpretations (tags).
-data Elem = Elem
-    { sent  :: X.Sent P.Tag
-    , orig  :: T.Text }
+-- | Perform morphlogical disambiguation on the input data.
+-- Same as `tag`, but assumes that analysis is already done.
+tagSent :: Concraft -> X.Sent P.Tag -> X.Sent P.Tag
+tagSent Concraft{..} =
+    D.disambSent disamb . G.guessSent guessNum guesser
+
+-- | Train guessing and disambiguation models.
+trainNoAna
+    :: P.Tagset         -- ^ Tagset
+    -> Int              -- ^ Numer of guessed tags for each word 
+    -> G.TrainConf      -- ^ Guessing model training configuration
+    -> D.TrainConf      -- ^ Disambiguation model training configuration
+    -> [X.Sent P.Tag]   -- ^ Training data
+    -> Maybe [X.Sent P.Tag] -- ^ Maybe evaluation data
+    -> IO Concraft
+trainNoAna tagset guessNum guessConf disambConf trainR evalR = do
+    withTemp "train" trainR $ \trainR'IO -> do
+    withTemp' "eval" evalR  $ \evalR'IO  -> do
+
+    putStrLn "\n===== Train guessing model ====\n"
+    guesser <- do
+        tr <- trainR'IO
+        ev <- evalR'IO
+        G.train guessConf tr ev
+    trainG <-       map (G.guessSent guessNum guesser)  <$> trainR'IO
+    evalG  <- fmap (map (G.guessSent guessNum guesser)) <$> evalR'IO
+
+    putStrLn "\n===== Train disambiguation model ====\n"
+    disamb <- D.train disambConf trainG evalG
+    return $ Concraft tagset guessNum guesser disamb
 
 -- | Train guessing and disambiguation models.
 -- TODO: Its probably a good idea to take an input dataset as a list, since
@@ -74,8 +94,8 @@ train
     -> Int              -- ^ Numer of guessed tags for each word 
     -> G.TrainConf      -- ^ Guessing model training configuration
     -> D.TrainConf      -- ^ Disambiguation model training configuration
-    -> [Elem]           -- ^ Training data
-    -> Maybe [Elem]     -- ^ Maybe evaluation data
+    -> [X.SentO P.Tag]  -- ^ Training data
+    -> Maybe [X.SentO P.Tag]    -- ^ Maybe evaluation data
     -> IO Concraft
 train tagset ana guessNum guessConf disambConf train0 eval0 = do
     putStrLn "\n===== Reanalysis ====\n"
@@ -103,28 +123,32 @@ train tagset ana guessNum guessConf disambConf train0 eval0 = do
 -- deleted after the handler is done.
 -- TODO: Try using pipes instead of lazy IO (input being a pipe as well?).
 withTemp
-    :: String                               -- ^ Template name for `Temp.withTempFile` function
-    -> [X.Sent P.Tag]                       -- ^ Input dataset
-    -> (IO [X.Sent P.Tag] -> IO a)          -- ^ Handler
+    :: String                       -- ^ Template for `Temp.withTempFile`
+    -> [X.Sent P.Tag]               -- ^ Input dataset
+    -> (IO [X.Sent P.Tag] -> IO a)  -- ^ Handler
     -> IO a
 withTemp tmpl xs handler = withTemp' tmpl (Just xs) (handler . fmap fromJust)
 
 -- | The same as `withTemp` but on a `Maybe` dataset.
-withTemp' :: String -> Maybe [X.Sent P.Tag] -> (IO (Maybe [X.Sent P.Tag]) -> IO a) -> IO a
-withTemp' tmpl (Just xs) handler = Temp.withTempFile "." tmpl $ \tmpPath tmpHandle -> do
+withTemp' :: String
+          -> Maybe [X.Sent P.Tag]
+          -> (IO (Maybe [X.Sent P.Tag]) -> IO a)
+          -> IO a
+withTemp' tmpl (Just xs) handler =
+  Temp.withTempFile "." tmpl $ \tmpPath tmpHandle -> do
     hClose tmpHandle
     encodeFile tmpPath xs
     handler (decodeFile tmpPath)
 withTemp' _ Nothing handler = handler (return Nothing)
 
 -- | Reanalyse the dataset.
-reanalyse :: P.Tagset -> Analyse -> [Elem] -> [X.Sent P.Tag]
+reanalyse :: P.Tagset -> Analyse -> [X.SentO P.Tag] -> [X.Sent P.Tag]
 reanalyse tagset ana elems = chunk
    (map length reana)
    (X.sync tagset (concat gold) (concat reana))
   where
-    gold    = map sent elems
-    reana   = ana $ L.fromChunks $ map orig elems
+    gold    = map X.sent elems
+    reana   = ana $ L.fromChunks $ map X.orig elems
 
 -- | Divide the list into a list of chunks given the list of
 -- lengths of individual chunks.

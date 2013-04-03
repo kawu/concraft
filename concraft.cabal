@@ -45,8 +45,6 @@ library
       , NLP.Concraft.Guess
       , NLP.Concraft.Disamb
       , NLP.Concraft.Morphosyntax
-      -- , NLP.Concraft.Format
-      -- , NLP.Concraft.Format.Plain
       , NLP.Concraft.Schema
 
     other-modules:

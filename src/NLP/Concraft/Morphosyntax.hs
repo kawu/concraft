@@ -7,16 +7,28 @@
 module NLP.Concraft.Morphosyntax
 ( 
 -- * Basic types
+-- ** Sentence
   Sent
+, SentO (..)
 , mapSent
+, mapSentO
+-- ** Segment
 , Seg (..)
 , mapSeg
 , interpsSet
 , interps
+
+-- * Conversion
+, segTag
+, segText
+, sentTag
+, sentText
+
 -- * Weighted collection
 , WMap (unWMap)
 , mapWMap
 , mkWMap
+
 -- * Alignment and synchronization
 , align
 , sync
@@ -40,9 +52,24 @@ import qualified Data.Tagset.Positional as P
 -- | A sentence. 
 type Sent t = [Seg t]
 
+-- | A sentence with its original, textual representation.
+-- TODO: For the sake of training, SentO doesn't have to be a full-fledged
+-- sentence.  In particular, it doesn't have to contain morphosyntactic
+-- analysis results, just a list of words and chosen interpretations (tags).
+-- However, maybe it is not necessary to change the type?
+data SentO t = SentO
+    { sent  :: Sent t
+    , orig  :: T.Text }
+
 -- | Map function over sentence tags.
 mapSent :: Ord b => (a -> b) -> Sent a -> Sent b
 mapSent = map.mapSeg
+
+-- | Map function over sentence tags.
+mapSentO :: Ord b => (a -> b) -> SentO a -> SentO b
+mapSentO f x =
+    let s = mapSent f (sent x)
+    in  x { sent = s }
 
 -- | A segment parametrized over a tag type.
 data Seg t = Seg {
@@ -92,6 +119,26 @@ mkWMap = WMap . M.fromListWith (+) . filter ((>=0).snd)
 -- | Map function over weighted collection elements. 
 mapWMap :: Ord b => (a -> b) -> WMap a -> WMap b
 mapWMap f = mkWMap . map (first f) . M.toList . unWMap
+
+--------------------------
+-- Conversion
+--------------------------
+
+-- | Parse segment tags.
+segTag :: P.Tagset -> Seg T.Text -> Seg P.Tag
+segTag tagset = mapSeg (P.parseTag tagset)
+
+-- | Show segment tags.
+segText :: P.Tagset -> Seg P.Tag -> Seg T.Text
+segText tagset = mapSeg (P.showTag tagset)
+
+-- | Parse sentence tags.
+sentTag :: P.Tagset -> Sent T.Text -> Sent P.Tag
+sentTag = map . segTag
+
+-- | Show sentence tags.
+sentText :: P.Tagset -> Sent P.Tag -> Sent T.Text
+sentText = map . segText
 
 --------------------------------
 -- Alignment and synchronization

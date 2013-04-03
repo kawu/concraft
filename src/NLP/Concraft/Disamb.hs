@@ -9,7 +9,6 @@ module NLP.Concraft.Disamb
 -- * Tiers
 , P.Tier (..)
 , P.Atom (..)
-, P.tiersDefault
 
 -- * Disambiguation
 , disamb
