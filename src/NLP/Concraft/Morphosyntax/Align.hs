@@ -20,6 +20,9 @@ import           NLP.Concraft.Morphosyntax
 
 -- | Synchronize two datasets, taking disamb tags from the first one
 -- and the rest of information form the second one.
+-- In case of differences in token-level segmentation, reference segmentation
+-- (token-level) is assumed.  Otherwise, it would be difficult to choose
+-- correct disamb tags.
 sync :: HasOrth w => P.Tagset -> [Seg w P.Tag] -> [Seg w P.Tag] -> [Seg w P.Tag]
 sync tagset xs ys = concatMap (uncurry (moveDisamb tagset)) (align xs ys)
 

@@ -18,16 +18,16 @@ module NLP.Concraft
 , trainNoAna
 ) where
 
-import System.IO (hClose)
-import Control.Applicative ((<$>), (<*>))
-import Data.Maybe (fromJust)
-import Data.Binary (Binary, put, get, encodeFile, decodeFile)
+import           System.IO (hClose)
+import           Control.Applicative ((<$>), (<*>))
+import           Data.Binary (Binary, put, get, encodeFile, decodeFile)
+import           Data.Maybe (fromJust)
 import qualified Data.Text.Lazy as L
 import qualified System.IO.Temp as Temp
 
+import           NLP.Concraft.Morphosyntax
 import qualified Data.Tagset.Positional as P
-import qualified NLP.Concraft.Morphosyntax as X
-import qualified NLP.Concraft.Morphosyntax.Align as X
+import qualified NLP.Concraft.Morphosyntax.Align as A
 import qualified NLP.Concraft.Guess as G
 import qualified NLP.Concraft.Disamb as D
 
@@ -56,20 +56,16 @@ instance Binary Concraft where
 
 -- | An analyser performs segmentation (sentence- and token-level)
 -- and morphological analysis.
-type Analyse w t = L.Text -> [X.Sent w t]
-
--- | A sentence with original, textual representation.
-data SentO w t = SentO
-    { sent  :: X.Sent w t
-    , orig  :: L.Text }
+-- TODO: Perhaps we should make sure, that every sentence is non-empty?
+type Analyse w t = L.Text -> [Sent w t]
 
 -- | Given analysis input and its result, restore textual representations
 -- corresponding to individual sentences.
-restore :: X.HasOrth w => L.Text -> [X.Sent w t] -> [L.Text]
+restore :: HasOrth w => L.Text -> [Sent w t] -> [L.Text]
 restore = undefined
 
 -- | Analyse and `restore` input text.
-anaRestore :: X.HasOrth w => Analyse w t -> L.Text -> [SentO w t]
+anaRestore :: HasOrth w => Analyse w t -> L.Text -> [SentO w t]
 anaRestore ana inp =
     let rs = ana inp
         ts = restore inp rs
@@ -81,17 +77,17 @@ anaRestore ana inp =
 
 -- | Tag sentence using the model.  In your code you should probably
 -- use your analysis function, translate results into a container of
--- `X.Sent`ences, evaluate `tagSent` on each sentence and embed the
+-- `Sent`ences, evaluate `tagSent` on each sentence and embed the
 -- tagging results into morphosyntactic structure of your own.
-tag :: (X.HasOOV w, X.HasOrth w) => Concraft -> X.Sent w P.Tag -> [P.Tag]
+tag :: (HasOOV w, HasOrth w) => Concraft -> Sent w P.Tag -> [P.Tag]
 tag Concraft{..} = D.disamb disamb . G.guessSent guessNum guesser
 
 -- -- | Perform morphlogical tagging on the input text.
--- tag :: Analyse -> Concraft -> L.Text -> [[X.Sent P.Tag]]
+-- tag :: Analyse -> Concraft -> L.Text -> [[Sent P.Tag]]
 -- tag analyse concraft = map (tagPar concraft) . analyse
 
 -- -- Tag paragraph.  The function doesn't perform reanalysis.
--- tagPar :: Concraft -> [X.Sent P.Tag] -> [X.Sent P.Tag]
+-- tagPar :: Concraft -> [Sent P.Tag] -> [Sent P.Tag]
 -- tagPar = map . tagSent
 
 ---------------------
@@ -100,13 +96,13 @@ tag Concraft{..} = D.disamb disamb . G.guessSent guessNum guesser
 
 -- | Train guessing and disambiguation models.
 trainNoAna
-    :: (X.HasOOV w, X.HasOrth w, Binary w)
+    :: (HasOOV w, HasOrth w, Binary w)
     => P.Tagset         -- ^ Tagset
     -> Int              -- ^ Numer of guessed tags for each word 
     -> G.TrainConf      -- ^ Guessing model training configuration
     -> D.TrainConf      -- ^ Disambiguation model training configuration
-    -> [X.Sent w P.Tag] -- ^ Training data
-    -> Maybe [X.Sent w P.Tag] -- ^ Maybe evaluation data
+    -> [Sent w P.Tag] -- ^ Training data
+    -> Maybe [Sent w P.Tag] -- ^ Maybe evaluation data
     -> IO Concraft
 trainNoAna tagset guessNum guessConf disambConf trainR evalR = do
     withTemp "train" trainR $ \trainR'IO -> do
@@ -132,7 +128,7 @@ trainNoAna tagset guessNum guessConf disambConf trainR evalR = do
 -- of datasets, they can be easily transormed into pipes.
 -- TODO: Use some legible format to store temporary files, for users sake.
 train
-    :: (X.HasOOV w, X.HasOrth w, Binary w)
+    :: (HasOOV w, HasOrth w, Binary w)
     => P.Tagset         -- ^ Tagset
     -> Analyse w P.Tag  -- ^ Analysis function
     -> Int              -- ^ Numer of guessed tags for each word 
@@ -142,7 +138,7 @@ train
     -> Maybe [SentO w P.Tag]  -- ^ Maybe evaluation data
     -> IO Concraft
 train tagset ana guessNum guessConf disambConf train0 eval0 = do
-    putStrLn "\n===== Reanalysis ====\n"
+    putStrLn "\n===== Reanalysis ====="
     let trainR = reanalyse tagset ana train0
         evalR  = case eval0 of
             Just ev -> Just $ reanalyse tagset ana ev
@@ -150,7 +146,7 @@ train tagset ana guessNum guessConf disambConf train0 eval0 = do
     withTemp "train" trainR $ \trainR'IO -> do
     withTemp' "eval" evalR  $ \evalR'IO  -> do
 
-    putStrLn "\n===== Train guessing model ====\n"
+    putStrLn "\n===== Train guessing model ====="
     guesser <- do
         tr <- trainR'IO
         ev <- evalR'IO
@@ -158,7 +154,7 @@ train tagset ana guessNum guessConf disambConf train0 eval0 = do
     trainG <-       map (G.guessSent guessNum guesser)  <$> trainR'IO
     evalG  <- fmap (map (G.guessSent guessNum guesser)) <$> evalR'IO
 
-    putStrLn "\n===== Train disambiguation model ====\n"
+    putStrLn "\n===== Train disambiguation model ====="
     disamb <- D.train disambConf trainG evalG
     return $ Concraft tagset guessNum guesser disamb
 
@@ -168,34 +164,38 @@ train tagset ana guessNum guessConf disambConf train0 eval0 = do
 -- TODO: Try using pipes instead of lazy IO (input being a pipe as well?).
 withTemp
     :: Binary w
-    => String                         -- ^ Template for `Temp.withTempFile`
-    -> [X.Sent w P.Tag]               -- ^ Input dataset
-    -> (IO [X.Sent w P.Tag] -> IO a)  -- ^ Handler
+    => String                       -- ^ Template for `Temp.withTempFile`
+    -> [Sent w P.Tag]               -- ^ Input dataset
+    -> (IO [Sent w P.Tag] -> IO a)  -- ^ Handler
     -> IO a
+-- The following version didn't work:
 withTemp tmpl xs handler = withTemp' tmpl (Just xs) (handler . fmap fromJust)
 
 -- | The same as `withTemp` but on a `Maybe` dataset.
 withTemp'
     :: Binary w
     => String
-    -> Maybe [X.Sent w P.Tag]
-    -> (IO (Maybe [X.Sent w P.Tag]) -> IO a)
+    -> Maybe [Sent w P.Tag]
+    -> (IO (Maybe [Sent w P.Tag]) -> IO a)
     -> IO a
 withTemp' tmpl (Just xs) handler =
   Temp.withTempFile "." tmpl $ \tmpPath tmpHandle -> do
     hClose tmpHandle
     encodeFile tmpPath xs
-    handler (decodeFile tmpPath)
+    handler (Just <$> decodeFile tmpPath)
 withTemp' _ Nothing handler = handler (return Nothing)
 
 -- | Reanalyse paragraph.
-reanalyse :: X.HasOrth w => P.Tagset -> Analyse w P.Tag
-          -> [SentO w P.Tag] -> [X.Sent w P.Tag]
+reanalyse :: HasOrth w => P.Tagset -> Analyse w P.Tag
+          -> [SentO w P.Tag] -> [Sent w P.Tag]
 reanalyse tagset ana xs = chunk
-    (map length reana)
-    (X.sync tagset (concat gold) (concat reana))
+    -- We have to take sentence lengths from the reference corpus because
+    -- token-level segmentation is also taken from the reference corpus
+    -- (in case of inconsistencies between the two corpora).
+    (map length gold)
+    (A.sync tagset (concat gold) (concat reana))
   where
-    gold  = map sent xs
+    gold  = map segs xs
     reana = ana . L.concat $ map orig xs
 
 -- | Divide the list into a list of chunks given the list of

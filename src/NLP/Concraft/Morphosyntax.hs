@@ -18,12 +18,8 @@ module NLP.Concraft.Morphosyntax
 -- * Sentence
 , Sent
 , mapSent
-
--- -- * Conversion
--- , segTag
--- , segText
--- , sentTag
--- , sentText
+, SentO (..)
+, mapSentO
 
 -- * Weighted collection
 , WMap (unWMap)
@@ -37,6 +33,7 @@ import Data.Binary (Binary, put, get)
 import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as L
 
 --------------------------
 -- Segment
@@ -101,11 +98,17 @@ type Sent w t = [Seg w t]
 mapSent :: Ord b => (a -> b) -> Sent w a -> Sent w b
 mapSent = map . mapSeg
 
--- -- | Restore original, textual representation of a sentence.
--- restore :: Sent t -> T.Text
--- restore =
---     let toStr Seg{..} = unSpace space `T.append` orth
---     in  T.concat . map toStr
+-- | A sentence with original, textual representation.
+data SentO w t = SentO
+    { segs  :: Sent w t
+    , orig  :: L.Text }
+    deriving (Show)
+
+-- | Map function over sentence tags.
+mapSentO :: Ord b => (a -> b) -> SentO w a -> SentO w b
+mapSentO f x =
+    let segs' = mapSent f (segs x)
+    in  x { segs = segs' }
 
 ----------------------
 -- Weighted collection
@@ -123,23 +126,3 @@ mkWMap = WMap . M.fromListWith (+) . filter ((>=0).snd)
 -- | Map function over weighted collection elements. 
 mapWMap :: Ord b => (a -> b) -> WMap a -> WMap b
 mapWMap f = mkWMap . map (first f) . M.toList . unWMap
-
--- --------------------------
--- -- Conversion
--- --------------------------
--- 
--- -- | Parse segment tags.
--- segTag :: P.Tagset -> Seg T.Text -> Seg P.Tag
--- segTag tagset = mapSeg (P.parseTag tagset)
--- 
--- -- | Show segment tags.
--- segText :: P.Tagset -> Seg P.Tag -> Seg T.Text
--- segText tagset = mapSeg (P.showTag tagset)
--- 
--- -- | Parse sentence tags.
--- sentTag :: P.Tagset -> Sent T.Text -> Sent P.Tag
--- sentTag = map . segTag
--- 
--- -- | Show sentence tags.
--- sentText :: P.Tagset -> Sent P.Tag -> Sent T.Text
--- sentText = map . segText
