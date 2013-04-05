@@ -15,6 +15,7 @@ module NLP.Concraft.Analysis
 ) where
 
 
+import System.IO.Unsafe (unsafeInterleaveIO)
 import qualified Data.Text.Lazy as L
 
 import           NLP.Concraft.Morphosyntax
@@ -28,7 +29,7 @@ import qualified NLP.Concraft.Morphosyntax.Align as A
 
 
 -- | An analyser performs word-level segmentation and morphological analysis.
-type Analyse w t = L.Text -> Sent w t
+type Analyse w t = L.Text -> IO (Sent w t)
 
 
 ---------------------
@@ -49,18 +50,25 @@ type Analyse w t = L.Text -> Sent w t
 --   * Potential interpretations
 --
 reAnaSent :: Word w => P.Tagset -> Analyse w P.Tag
-          -> SentO w P.Tag -> Sent w P.Tag
-reAnaSent tagset ana sent =
-    A.sync tagset gold reana
-  where
-    gold  = segs sent
-    reana = ana (orig sent)
+          -> SentO w P.Tag -> IO (Sent w P.Tag)
+reAnaSent tagset ana sent = do
+    let gold = segs sent
+    reana <- ana (orig sent)
+    return $ A.sync tagset gold reana
 
 
 -- | Reanalyse paragraph.
 reAnaPar :: Word w => P.Tagset -> Analyse w P.Tag
-         -> [SentO w P.Tag] -> [Sent w P.Tag]
-reAnaPar tagset ana = map (reAnaSent tagset ana)
+         -> [SentO w P.Tag] -> IO [Sent w P.Tag]
+reAnaPar tagset ana = lazyMapM (reAnaSent tagset ana)
+
+
+lazyMapM :: (a -> IO b) -> [a] -> IO [b]
+lazyMapM f (x:xs) = do
+    y <- f x
+    ys <- unsafeInterleaveIO $ lazyMapM f xs
+    return (y:ys)
+lazyMapM _ [] = return []
 
 
 ---------------------

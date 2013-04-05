@@ -81,10 +81,10 @@ train
     -> IO Concraft
 train tagset ana guessNum guessConf disambConf train0 eval0 = do
     putStrLn "\n===== Reanalysis ====="
-    let trainR = reAnaPar tagset ana train0
-        evalR  = case eval0 of
-            Just ev -> Just $ reAnaPar tagset ana ev
-            Nothing -> Nothing
+    trainR <- reAnaPar tagset ana train0
+    evalR  <- case eval0 of
+            Just ev -> Just <$> reAnaPar tagset ana ev
+            Nothing -> return Nothing
     withTemp tagset "train" trainR $ \trainR'IO -> do
     withTemp' tagset "eval" evalR  $ \evalR'IO  -> do
 
