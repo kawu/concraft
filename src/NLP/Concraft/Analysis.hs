@@ -39,11 +39,15 @@ type Analyse w t = L.Text -> Sent w t
 -- | Reanalyse sentence.
 --
 -- From the reference sentence the function takes:
+--
 --   * Word-level segmentation
+--
 --   * Chosen interpretations (tags)
 --
 -- From the reanalysed sentence the function takes:
+--
 --   * Potential interpretations
+--
 reAnaSent :: Word w => P.Tagset -> Analyse w P.Tag
           -> SentO w P.Tag -> Sent w P.Tag
 reAnaSent tagset ana sent =
