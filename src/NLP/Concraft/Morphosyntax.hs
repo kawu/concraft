@@ -1,7 +1,11 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 
 -- | Types and functions related to the morphosyntax data layer.
+
 
 module NLP.Concraft.Morphosyntax
 ( 
@@ -11,7 +15,7 @@ module NLP.Concraft.Morphosyntax
 , interpsSet
 , interps
 
--- * Word class
+-- * Word classes
 , Word (..)
 
 -- * Sentence
@@ -26,17 +30,20 @@ module NLP.Concraft.Morphosyntax
 , mkWMap
 ) where
 
-import Control.Applicative ((<$>), (<*>))
-import Control.Arrow (first)
-import Data.Binary (Binary, put, get)
+
+import           Control.Applicative ((<$>), (<*>))
+import           Control.Arrow (first)
+import           Data.Aeson
 import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
 
+
 --------------------------
 -- Segment
 --------------------------
+
 
 -- | A segment parametrized over a word type and a tag type.
 data Seg w t = Seg {
@@ -49,33 +56,44 @@ data Seg w t = Seg {
     , tags  :: WMap t }
     deriving (Show)
 
-instance (Binary w, Ord t, Binary t) => Binary (Seg w t) where
-    put Seg{..} = do
-        put word
-        put tags
-    get = Seg <$> get <*> get
+
+instance ToJSON w => ToJSON (Seg w T.Text) where
+    toJSON Seg{..} = object
+        [ "word" .= word
+        , "tags" .= unWMap tags ]
+
+instance FromJSON w => FromJSON (Seg w T.Text) where
+    parseJSON (Object v) = Seg
+        <$> v .: "word"
+        <*> (mkWMap <$> v .: "tags")
+    parseJSON _ = error "parseJSON (segment): absurd"
+
 
 -- | Map function over segment tags.
 mapSeg :: Ord b => (a -> b) -> Seg w a -> Seg w b
 mapSeg f w = w { tags = mapWMap f (tags w) }
 
+
 -- | Interpretations of the segment.
 interpsSet :: Seg w t -> S.Set t
 interpsSet = M.keysSet . unWMap . tags
+
 
 -- | Interpretations of the segment.
 interps :: Seg w t -> [t]
 interps = S.toList . interpsSet
 
+
 --------------------------
--- Word class
+-- Word classes
 --------------------------
+
 
 class Word a where
     -- | Orthographic form.
-    orth :: a -> T.Text 
+    orth    :: a -> T.Text 
     -- | Out-of-vocabulary (OOV) word.
-    oov :: a -> Bool
+    oov     :: a -> Bool
 
 instance Word w => Word (Seg w t) where
     orth = orth . word
@@ -83,9 +101,11 @@ instance Word w => Word (Seg w t) where
     oov = oov . word
     {-# INLINE oov #-}
 
+
 ----------------------
 -- Sentence
 ----------------------
+
 
 -- | A sentence.
 type Sent w t = [Seg w t]
@@ -113,11 +133,13 @@ mapSentO f x =
 -- | A set with a non-negative weight assigned to each of
 -- its elements.
 newtype WMap a = WMap { unWMap :: M.Map a Double }
-    deriving (Show, Eq, Ord, Binary)
+    deriving (Show, Eq, Ord)
+
 
 -- | Make a weighted collection.  Negative elements will be ignored.
 mkWMap :: Ord a => [(a, Double)] -> WMap a
 mkWMap = WMap . M.fromListWith (+) . filter ((>=0).snd)
+
 
 -- | Map function over weighted collection elements. 
 mapWMap :: Ord b => (a -> b) -> WMap a -> WMap b

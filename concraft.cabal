@@ -23,6 +23,7 @@ library
       , array
       , containers
       , binary
+      , bytestring
       , text
       , text-binary >= 0.1 && < 0.2
       , vector
@@ -37,6 +38,8 @@ library
       , transformers
       , comonad-transformers
       , temporary
+      , aeson >= 0.6 && < 0.7
+      , aeson-pretty >= 0.7 && < 0.8
 
     exposed-modules:
         NLP.Concraft
@@ -50,6 +53,7 @@ library
         NLP.Concraft.Disamb.Tiered
       , NLP.Concraft.Disamb.Positional
       , NLP.Concraft.Morphosyntax.Align
+      , NLP.Concraft.Format.Temp
 
 
     ghc-options: -Wall -O2

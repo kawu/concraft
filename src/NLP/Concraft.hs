@@ -14,12 +14,14 @@ module NLP.Concraft
 
 import           System.IO (hClose)
 import           Control.Applicative ((<$>), (<*>))
-import           Data.Binary (Binary, put, get, encodeFile, decodeFile)
+import           Data.Binary (Binary, put, get)
+import           Data.Aeson
 import           Data.Maybe (fromJust)
 import qualified System.IO.Temp as Temp
 
 import           NLP.Concraft.Morphosyntax
 import           NLP.Concraft.Analysis
+import           NLP.Concraft.Format.Temp
 import qualified Data.Tagset.Positional as P
 import qualified NLP.Concraft.Guess as G
 import qualified NLP.Concraft.Disamb as D
@@ -46,7 +48,6 @@ instance Binary Concraft where
     get = Concraft <$> get <*> get <*> get <*> get
 
 
-
 ---------------------
 -- Tagging
 ---------------------
@@ -69,7 +70,7 @@ tag Concraft{..} = D.disamb disamb . G.guessSent guessNum guesser
 -- TODO: We take an input dataset as a list, since it is read only once.
 -- TODO: Use some legible format to store temporary files.
 train
-    :: (Word w, Binary w)
+    :: (Word w, FromJSON w, ToJSON w)
     => P.Tagset         -- ^ Tagset
     -> Analyse w P.Tag  -- ^ Analysis function
     -> Int              -- ^ Numer of guessed tags for each word 
@@ -84,8 +85,8 @@ train tagset ana guessNum guessConf disambConf train0 eval0 = do
         evalR  = case eval0 of
             Just ev -> Just $ reAnaPar tagset ana ev
             Nothing -> Nothing
-    withTemp "train" trainR $ \trainR'IO -> do
-    withTemp' "eval" evalR  $ \evalR'IO  -> do
+    withTemp tagset "train" trainR $ \trainR'IO -> do
+    withTemp' tagset "eval" evalR  $ \evalR'IO  -> do
 
     putStrLn "\n===== Train guessing model ====="
     guesser <- do
@@ -105,27 +106,37 @@ train tagset ana guessNum guessConf disambConf train0 eval0 = do
 ---------------------
 
 
--- | Store dataset on a disk and run a handler on a lazy list which is read
--- directly from the disk.  A temporary file will be automatically
+-- | Store dataset on a disk and run a handler on a list which is read
+-- lazily from the disk.  A temporary file will be automatically
 -- deleted after the handler is done.
 withTemp
-    :: Binary w
-    => String                       -- ^ Template for `Temp.withTempFile`
+    :: (FromJSON w, ToJSON w)
+    => P.Tagset
+    -> String                       -- ^ Template for `Temp.withTempFile`
     -> [Sent w P.Tag]               -- ^ Input dataset
     -> (IO [Sent w P.Tag] -> IO a)  -- ^ Handler
     -> IO a
-withTemp tmpl xs handler = withTemp' tmpl (Just xs) (handler . fmap fromJust)
+withTemp tagset tmpl xs handler =
+    withTemp' tagset tmpl (Just xs) (handler . fmap fromJust)
 
--- | The same as `withTemp` but on a `Maybe` dataset.
+
+-- | Similar to `withTemp` but on a `Maybe` dataset.
+--
+-- Store dataset on a disk and run a handler on a list which is read
+-- lazily from the disk.  A temporary file will be automatically
+-- deleted after the handler is done.
 withTemp'
-    :: Binary w
-    => String
+    :: (FromJSON w, ToJSON w)
+    => P.Tagset
+    -> String
     -> Maybe [Sent w P.Tag]
     -> (IO (Maybe [Sent w P.Tag]) -> IO a)
     -> IO a
-withTemp' tmpl (Just xs) handler =
+withTemp' tagset tmpl (Just xs) handler =
   Temp.withTempFile "." tmpl $ \tmpPath tmpHandle -> do
     hClose tmpHandle
-    encodeFile tmpPath xs
-    handler (Just <$> decodeFile tmpPath)
-withTemp' _ Nothing handler = handler (return Nothing)
+    let txtSent = mapSent $ P.showTag tagset
+        tagSent = mapSent $ P.parseTag tagset
+    writePar tmpPath $ map txtSent xs
+    handler (Just . map tagSent <$> readPar tmpPath)
+withTemp' _ _ Nothing handler = handler (return Nothing)
