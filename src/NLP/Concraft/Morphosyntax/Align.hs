@@ -23,7 +23,7 @@ import           NLP.Concraft.Morphosyntax
 -- In case of differences in token-level segmentation, reference segmentation
 -- (token-level) is assumed.  Otherwise, it would be difficult to choose
 -- correct disamb tags.
-sync :: HasOrth w => P.Tagset -> [Seg w P.Tag] -> [Seg w P.Tag] -> [Seg w P.Tag]
+sync :: Word w => P.Tagset -> [Seg w P.Tag] -> [Seg w P.Tag] -> [Seg w P.Tag]
 sync tagset xs ys = concatMap (uncurry (moveDisamb tagset)) (align xs ys)
 
 -- | If both arguments contain only one segment, insert disamb interpretations
@@ -51,7 +51,7 @@ moveDisamb tagset [v] [w] =
 moveDisamb _ xs _ = xs
 
 -- | Align two lists of segments.
-align :: HasOrth w => [Seg w t] -> [Seg w t] -> [([Seg w t], [Seg w t])]
+align :: Word w => [Seg w t] -> [Seg w t] -> [([Seg w t], [Seg w t])]
 align [] [] = []
 align [] _  = error "align: null xs, not null ys"
 align _  [] = error "align: not null xs, null ys"
@@ -61,7 +61,7 @@ align xs ys =
     in  (x, y) : rest
 
 -- | Find the shortest, length-matching prefixes in the two input lists.
-match :: HasOrth w => [Seg w t] -> [Seg w t] -> ([Seg w t], [Seg w t])
+match :: Word w => [Seg w t] -> [Seg w t] -> ([Seg w t], [Seg w t])
 match xs' ys' =
     doIt 0 xs' 0 ys'
   where

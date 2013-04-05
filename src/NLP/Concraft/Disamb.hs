@@ -67,7 +67,7 @@ unSplit :: Eq t => (r -> t) -> X.Seg w r -> t -> r
 unSplit split' word x = fromJust $ find ((==x) . split') (X.interps word)
 
 -- | Perform context-sensitive disambiguation.
-disamb :: (X.HasOOV w, X.HasOrth w) => Disamb -> X.Sent w T.Tag -> [T.Tag]
+disamb :: X.Word w => Disamb -> X.Sent w T.Tag -> [T.Tag]
 disamb Disamb{..} sent
     = map (uncurry embed)
     . zip sent
@@ -92,8 +92,7 @@ include f sent =
         | y <- X.interps word ]
 
 -- | Combine `disamb` with `include`. 
-disambSent :: (X.HasOOV w, X.HasOrth w) => Disamb
-           -> X.Sent w T.Tag -> X.Sent w T.Tag
+disambSent :: X.Word w => Disamb -> X.Sent w T.Tag -> X.Sent w T.Tag
 disambSent = include . disamb
 
 -- | Training configuration.
@@ -104,7 +103,7 @@ data TrainConf = TrainConf
 
 -- | Train disamb model.
 train
-    :: (X.HasOOV w, X.HasOrth w)
+    :: X.Word w
     => TrainConf                        -- ^ Training configuration
     -> [X.Sent w T.Tag]                 -- ^ Training data
     -> Maybe [X.Sent w T.Tag]           -- ^ Maybe evaluation data

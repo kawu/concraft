@@ -28,7 +28,7 @@ library
       , vector
       , vector-binary
       , crf-chain1-constrained >= 0.1.2 && < 0.2
-      , monad-ox >= 0.2 && < 0.3
+      , monad-ox >= 0.3 && < 0.4
       , sgd >= 0.2.2 && < 0.3
       , tagset-positional >= 0.3 && < 0.4
       , crf-chain2-generic >= 0.3 && < 0.4
@@ -37,30 +37,23 @@ library
       , transformers
       , comonad-transformers
       , temporary
-      -- , pipes >= 3.2 && < 3.3
-      -- , errors >= 1.4 && < 1.5
 
     exposed-modules:
         NLP.Concraft
+      , NLP.Concraft.Morphosyntax
+      , NLP.Concraft.Analysis
+      , NLP.Concraft.Schema
       , NLP.Concraft.Guess
       , NLP.Concraft.Disamb
-      , NLP.Concraft.Morphosyntax
-      , NLP.Concraft.Schema
 
     other-modules:
         NLP.Concraft.Disamb.Tiered
       , NLP.Concraft.Disamb.Positional
       , NLP.Concraft.Morphosyntax.Align
 
+
     ghc-options: -Wall -O2
 
 source-repository head
     type: git
     location: https://github.com/kawu/concraft.git
-
--- executable concraft
---     build-depends:
---         cmdargs
---     hs-source-dirs: src, tools
---     main-is: concraft.hs    
---     ghc-options: -Wall -O2 -threaded -rtsopts

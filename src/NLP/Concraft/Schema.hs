@@ -52,11 +52,11 @@ import qualified NLP.Concraft.Morphosyntax as X
 type Ob = ([Int], T.Text)
 
 -- | The Ox monad specialized to word token type and text observations.
-type Ox w t a = Ox.Ox (X.Seg w t) T.Text a
+type Ox a = Ox.Ox T.Text a
 
 -- | A schema is a block of the Ox computation performed within the
 -- context of the sentence and the absolute sentence position.
-type Schema w t a = V.Vector (X.Seg w t) -> Int -> Ox w t a
+type Schema w t a = V.Vector (X.Seg w t) -> Int -> Ox a
 
 -- | A dummy schema block.
 void :: a -> Schema w t a
@@ -64,8 +64,8 @@ void x _ _ = return x
 
 -- | Sequence the list of schemas (or blocks) and discard individual values.
 sequenceS_
-    :: [V.Vector (X.Seg w t) -> a -> Ox w t b]
-    ->  V.Vector (X.Seg w t) -> a -> Ox w t ()
+    :: [V.Vector (X.Seg w t) -> a -> Ox b]
+    ->  V.Vector (X.Seg w t) -> a -> Ox ()
 sequenceS_ xs sent =
     let ys = map ($sent) xs
     in  \k -> sequence_ (map ($k) ys)
@@ -76,7 +76,7 @@ data BaseOb = BaseOb
     , lowOrth       :: Int -> Maybe T.Text }
 
 -- | Construct the 'BaseOb' structure given the sentence.
-mkBaseOb :: X.HasOrth w => V.Vector (X.Seg w t) -> BaseOb
+mkBaseOb :: X.Word w => V.Vector (X.Seg w t) -> BaseOb
 mkBaseOb sent = BaseOb
     { orth      = _orth
     , lowOrth   = _lowOrth }
@@ -87,14 +87,14 @@ mkBaseOb sent = BaseOb
 
 -- | A block is a chunk of the Ox computation performed within the
 -- context of the sentence and the list of absolute sentence positions.
-type Block w t a = V.Vector (X.Seg w t) -> [Int] -> Ox w t a
+type Block w t a = V.Vector (X.Seg w t) -> [Int] -> Ox a
 
 -- | Transform a block to a schema depending on
 -- * A list of relative sentence positions,
 -- * A boolean value; if true, the block computation
 --   will be performed only on positions where an OOV
 --   word resides.
-fromBlock :: X.HasOOV w => Block w t a -> [Int] -> Bool -> Schema w t a
+fromBlock :: X.Word w => Block w t a -> [Int] -> Bool -> Schema w t a
 fromBlock blk xs oovOnly sent =
     \k -> blkSent [x + k | x <- xs, oov (x + k)]
   where
@@ -105,19 +105,19 @@ fromBlock blk xs oovOnly sent =
     at      = Ox.atWith sent
 
 -- | Orthographic form at the current position.
-orthB :: X.HasOrth w => Block w t ()
+orthB :: X.Word w => Block w t ()
 orthB sent = \ks ->
     let orthOb = Ox.atWith sent X.orth
     in  mapM_ (Ox.save . orthOb) ks
 
 -- | Orthographic form at the current position.
-lowOrthB :: X.HasOrth w => Block w t ()
+lowOrthB :: X.Word w => Block w t ()
 lowOrthB sent = \ks ->
     let BaseOb{..} = mkBaseOb sent
     in  mapM_ (Ox.save . lowOrth) ks
 
 -- | List of lowercased prefixes of given lengths.
-lowPrefixesB :: X.HasOrth w => [Int] -> Block w t ()
+lowPrefixesB :: X.Word w => [Int] -> Block w t ()
 lowPrefixesB ns sent = \ks ->
     forM_ ks $ \i ->
         mapM_ (Ox.save . lowPrefix i) ns
@@ -126,7 +126,7 @@ lowPrefixesB ns sent = \ks ->
     lowPrefix i j   = Ox.prefix j =<< lowOrth i
 
 -- | List of lowercased suffixes of given lengths.
-lowSuffixesB :: X.HasOrth w => [Int] -> Block w t ()
+lowSuffixesB :: X.Word w => [Int] -> Block w t ()
 lowSuffixesB ns sent = \ks ->
     forM_ ks $ \i ->
         mapM_ (Ox.save . lowSuffix i) ns
@@ -135,7 +135,7 @@ lowSuffixesB ns sent = \ks ->
     lowSuffix i j   = Ox.suffix j =<< lowOrth i
 
 -- | Shape of the word.
-knownB :: X.HasOOV w => Block w t ()
+knownB :: X.Word w => Block w t ()
 knownB sent = \ks -> do
     mapM_ (Ox.save . knownAt) ks
   where
@@ -145,7 +145,7 @@ knownB sent = \ks -> do
     boolF False = "F"
 
 -- | Shape of the word.
-shapeB :: (X.HasOrth w, X.HasOOV w) => Block w t ()
+shapeB :: X.Word w => Block w t ()
 shapeB sent = \ks -> do
     mapM_ (Ox.save . shape) ks
   where
@@ -153,7 +153,7 @@ shapeB sent = \ks -> do
     shape i         = Ox.shape <$> orth i
 
 -- | Packed shape of the word.
-packedB :: X.HasOrth w => Block w t ()
+packedB :: X.Word w => Block w t ()
 packedB sent = \ks -> do
     mapM_ (Ox.save . shapeP) ks
   where
@@ -162,7 +162,7 @@ packedB sent = \ks -> do
     shapeP i        = Ox.pack <$> shape i
 
 -- | Packed shape of the word.
-begPackedB :: X.HasOrth w => Block w t ()
+begPackedB :: X.Word w => Block w t ()
 begPackedB sent = \ks -> do
     mapM_ (Ox.save . begPacked) ks
   where
@@ -269,16 +269,16 @@ nullConf = SchemaConf
     Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing
 
-mkArg0 :: X.HasOOV w => Block w t () -> Entry () -> Schema w t ()
+mkArg0 :: X.Word w => Block w t () -> Entry () -> Schema w t ()
 mkArg0 blk (Just x) = fromBlock blk (range x) (oovOnly x)
 mkArg0 _   Nothing  = void ()
 
-mkArg1 :: X.HasOOV w => (a -> Block w t ()) -> Entry a -> Schema w t ()
+mkArg1 :: X.Word w => (a -> Block w t ()) -> Entry a -> Schema w t ()
 mkArg1 blk (Just x) = fromBlock (blk (args x)) (range x) (oovOnly x)
 mkArg1 _   Nothing  = void ()
 
 -- | Build the schema based on the configuration.
-fromConf :: (X.HasOOV w, X.HasOrth w) => SchemaConf -> Schema w t ()
+fromConf :: X.Word w => SchemaConf -> Schema w t ()
 fromConf SchemaConf{..} = sequenceS_
     [ mkArg0 orthB orthC
     , mkArg0 lowOrthB lowOrthC

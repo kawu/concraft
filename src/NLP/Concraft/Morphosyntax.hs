@@ -11,9 +11,8 @@ module NLP.Concraft.Morphosyntax
 , interpsSet
 , interps
 
--- * Word classes
-, HasOrth (..)
-, HasOOV (..)
+-- * Word class
+, Word (..)
 
 -- * Sentence
 , Sent
@@ -41,7 +40,8 @@ import qualified Data.Text.Lazy as L
 
 -- | A segment parametrized over a word type and a tag type.
 data Seg w t = Seg {
-    -- | A word represented by the segment.
+    -- | A word represented by the segment.  Typically it will be
+    -- an instance of the `Word` class.
       word  :: w
     -- | A set of interpretations.  To each interpretation
     -- a weight of appropriateness within the context
@@ -68,22 +68,18 @@ interps :: Seg w t -> [t]
 interps = S.toList . interpsSet
 
 --------------------------
--- Word classes
+-- Word class
 --------------------------
 
--- | Orthographic form.
-class HasOrth a where
+class Word a where
+    -- | Orthographic form.
     orth :: a -> T.Text 
-
-instance HasOrth w => HasOrth (Seg w t) where
-    orth = orth . word
-    {-# INLINE orth #-}
-    
--- | Out-of-vocabulary (OOV) word.
-class HasOOV a where
+    -- | Out-of-vocabulary (OOV) word.
     oov :: a -> Bool
 
-instance HasOOV w => HasOOV (Seg w t) where
+instance Word w => Word (Seg w t) where
+    orth = orth . word
+    {-# INLINE orth #-}
     oov = oov . word
     {-# INLINE oov #-}
 

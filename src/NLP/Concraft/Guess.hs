@@ -40,7 +40,7 @@ instance (Ord t, Binary t) => Binary (Guesser t) where
     get = Guesser <$> get <*> get
 
 -- | Schematize the input sentence with according to 'schema' rules.
-schematize :: (X.HasOOV w, Ord t) => Schema w t a -> X.Sent w t -> CRF.Sent Ob t
+schematize :: (X.Word w, Ord t) => Schema w t a -> X.Sent w t -> CRF.Sent Ob t
 schematize schema sent =
     [ CRF.Word (obs i) (lbs i)
     | i <- [0 .. n - 1] ]
@@ -54,14 +54,14 @@ schematize schema sent =
         where w = v V.! i
 
 -- | Determine 'k' most probable labels for each word in the sentence.
-guess :: (X.HasOOV w, X.HasOrth w, Ord t)
+guess :: (X.Word w, Ord t)
       => Int -> Guesser t -> X.Sent w t -> [[t]]
 guess k gsr sent =
     let schema = fromConf (schemaConf gsr)
     in  CRF.tagK k (crf gsr) (schematize schema sent)
 
 -- | Insert guessing results into the sentence.
-include :: (X.HasOOV w, Ord t) => (X.Sent w t -> [[t]])
+include :: (X.Word w, Ord t) => (X.Sent w t -> [[t]])
         -> X.Sent w t -> X.Sent w t
 include f sent =
     [ word { X.tags = tags }
@@ -77,7 +77,7 @@ include f sent =
         ++ zip xs [0, 0 ..]
 
 -- | Combine `guess` with `include`. 
-guessSent :: (X.HasOOV w, X.HasOrth w, Ord t)
+guessSent :: (X.Word w, Ord t)
           => Int -> Guesser t -> X.Sent w t -> X.Sent w t
 guessSent guessNum guesser = include (guess guessNum guesser)
 
@@ -88,7 +88,7 @@ data TrainConf = TrainConf
 
 -- | Train guesser.
 train
-    :: (X.HasOrth w, X.HasOOV w, Ord t)
+    :: (X.Word w, Ord t)
     => TrainConf            -- ^ Training configuration
     -> [X.Sent w t]         -- ^ Training data
     -> Maybe [X.Sent w t]   -- ^ Maybe evaluation data
@@ -104,7 +104,7 @@ train TrainConf{..} trainData evalData'Maybe = do
     retSchemed schema = return . schemed schema
 
 -- | Schematized data from the plain file.
-schemed :: (X.HasOOV w, Ord t) => Schema w t a
+schemed :: (X.Word w, Ord t) => Schema w t a
         -> [X.Sent w t] -> [CRF.SentL Ob t]
 schemed schema =
     map onSent
