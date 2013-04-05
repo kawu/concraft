@@ -65,7 +65,7 @@ instance ToJSON w => ToJSON (Seg w T.Text) where
 instance FromJSON w => FromJSON (Seg w T.Text) where
     parseJSON (Object v) = Seg
         <$> v .: "word"
-        <*> (mkWMap <$> v .: "tags")
+        <*> (WMap <$> v .: "tags")
     parseJSON _ = error "parseJSON (segment): absurd"
 
 
@@ -94,6 +94,7 @@ class Word a where
     orth    :: a -> T.Text 
     -- | Out-of-vocabulary (OOV) word.
     oov     :: a -> Bool
+
 
 instance Word w => Word (Seg w t) where
     orth = orth . word
