@@ -4,6 +4,8 @@ module NLP.Concraft
 (
 -- * Model 
   Concraft (..)
+, saveModel
+, loadModel
 
 -- * Tagging
 , tag
@@ -14,10 +16,14 @@ module NLP.Concraft
 
 import           System.IO (hClose)
 import           Control.Applicative ((<$>), (<*>))
+import           Control.Monad (when)
 import           Data.Binary (Binary, put, get)
+import qualified Data.Binary as Binary
 import           Data.Aeson
 import           Data.Maybe (fromJust)
 import qualified System.IO.Temp as Temp
+import qualified Data.ByteString.Lazy as BL
+import qualified Codec.Compression.GZip as GZip
 
 import           NLP.Concraft.Morphosyntax
 import           NLP.Concraft.Analysis
@@ -28,8 +34,12 @@ import qualified NLP.Concraft.Disamb as D
 
 
 ---------------------
--- Concraft
+-- Model
 ---------------------
+
+
+modelVersion :: String
+modelVersion = "0.5"
 
 
 -- | Concraft data.
@@ -39,13 +49,30 @@ data Concraft = Concraft
     , guesser       :: G.Guesser P.Tag
     , disamb        :: D.Disamb }
 
+
 instance Binary Concraft where
     put Concraft{..} = do
+        put modelVersion
         put tagset
         put guessNum
         put guesser
         put disamb
-    get = Concraft <$> get <*> get <*> get <*> get
+    get = do
+        comp <- get     
+        when (comp /= modelVersion) $ error $
+            "Incompatible model version: " ++ comp ++
+            ", expected: " ++ modelVersion
+        Concraft <$> get <*> get <*> get <*> get
+
+
+-- | Save model in a file.  Data is compressed using the gzip format.
+saveModel :: FilePath -> Concraft -> IO ()
+saveModel path = BL.writeFile path . GZip.compress . Binary.encode
+
+
+-- | Load model from a file.
+loadModel :: FilePath -> IO Concraft
+loadModel path = Binary.decode . GZip.decompress <$> BL.readFile path
 
 
 ---------------------

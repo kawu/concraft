@@ -39,7 +39,7 @@ library
       , comonad-transformers
       , temporary
       , aeson >= 0.6 && < 0.7
-      , aeson-pretty >= 0.7 && < 0.8
+      , zlib >= 0.5 && < 0.6
 
     exposed-modules:
         NLP.Concraft
