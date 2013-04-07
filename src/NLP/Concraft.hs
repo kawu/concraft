@@ -72,7 +72,9 @@ saveModel path = BL.writeFile path . GZip.compress . Binary.encode
 
 -- | Load model from a file.
 loadModel :: FilePath -> IO Concraft
-loadModel path = Binary.decode . GZip.decompress <$> BL.readFile path
+loadModel path = do
+    x <- Binary.decode . GZip.decompress <$> BL.readFile path
+    x `seq` return x
 
 
 ---------------------
