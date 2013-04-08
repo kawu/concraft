@@ -94,10 +94,9 @@ tag Concraft{..} = D.disamb disamb . G.guessSent guessNum guesser
 -- Training
 ---------------------
 
+-- INFO: We take an input dataset as a list, since it is read only once.
 
 -- | Train guessing and disambiguation models.
--- TODO: We take an input dataset as a list, since it is read only once.
--- TODO: Use some legible format to store temporary files.
 train
     :: (Word w, FromJSON w, ToJSON w)
     => P.Tagset         -- ^ Tagset
