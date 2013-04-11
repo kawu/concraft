@@ -4,7 +4,7 @@ module NLP.Concraft.Disamb
 (
 -- * Model
   Disamb (..)
-, Tier.CRF () 
+, CRF.CRF ()
 
 -- * Tiers
 , P.Tier (..)
@@ -29,18 +29,18 @@ import qualified Data.Map as M
 import qualified Data.Vector as V
 
 import qualified Control.Monad.Ox as Ox
-import qualified Data.CRF.Chain2.Generic.External as CRF
+import qualified Data.CRF.Chain2.Tiers as CRF
 
 import NLP.Concraft.Schema hiding (schematize)
 import qualified NLP.Concraft.Morphosyntax as X
 
-import qualified NLP.Concraft.Disamb.Tiered as Tier
+-- import qualified NLP.Concraft.Disamb.Tiered as Tier
 import qualified NLP.Concraft.Disamb.Positional as P
 import qualified Data.Tagset.Positional as T
 import qualified Numeric.SGD as SGD
 
 -- | Schematize the input sentence with according to 'schema' rules.
-schematize :: Schema w t a -> X.Sent w t -> CRF.Sent Ob t
+schematize :: Schema w [t] a -> X.Sent w [t] -> CRF.Sent Ob t
 schematize schema sent =
     [ CRF.mkWord (obs i) (lbs i)
     | i <- [0 .. n - 1] ]
@@ -55,7 +55,7 @@ schematize schema sent =
 data Disamb = Disamb
     { tiers         :: [P.Tier]
     , schemaConf    :: SchemaConf
-    , crf           :: Tier.CRF Ob P.Atom }
+    , crf           :: CRF.CRF Ob P.Atom }
 
 instance Binary Disamb where
     put Disamb{..} = put tiers >> put schemaConf >> put crf
@@ -71,7 +71,7 @@ disamb :: X.Word w => Disamb -> X.Sent w T.Tag -> [T.Tag]
 disamb Disamb{..} sent
     = map (uncurry embed)
     . zip sent
-    . Tier.tag crf
+    . CRF.tag crf
     . schematize schema
     . X.mapSent split
     $ sent
@@ -109,9 +109,10 @@ train
     -> Maybe [X.Sent w T.Tag]           -- ^ Maybe evaluation data
     -> IO Disamb                        -- ^ Resultant model
 train TrainConf{..} trainData evalData'Maybe = do
-    crf <- Tier.train
+    crf <- CRF.train
         (length tiersT)
         sgdArgsT
+        CRF.selectHidden
         (retSchemed schema split trainData)
         (retSchemed schema split <$> evalData'Maybe)
     return $ Disamb tiersT schemaConfT crf
@@ -121,12 +122,12 @@ train TrainConf{..} trainData evalData'Maybe = do
     split  = P.split tiersT
 
 -- | Schematized data from the plain file.
-schemed :: Ord t => Schema w t a -> (T.Tag -> t)
+schemed :: Ord t => Schema w [t] a -> (T.Tag -> [t])
         -> [X.Sent w T.Tag] -> [CRF.SentL Ob t]
 schemed schema split =
     map onSent
   where
     onSent sent =
         let xs  = map (X.mapSeg split) sent
-            mkDist = CRF.mkDist . M.toList . X.unWMap . X.tags
-        in  zip (schematize schema xs) (map mkDist xs)
+            mkProb = CRF.mkProb . M.toList . X.unWMap . X.tags
+        in  zip (schematize schema xs) (map mkProb xs)
