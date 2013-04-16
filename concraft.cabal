@@ -28,9 +28,9 @@ library
       , text-binary >= 0.1 && < 0.2
       , vector
       , vector-binary
-      , crf-chain1-constrained >= 0.1.2 && < 0.2
+      , crf-chain1-constrained >= 0.2 && < 0.3
       , monad-ox >= 0.3 && < 0.4
-      , sgd >= 0.2.2 && < 0.3
+      , sgd >= 0.3 && < 0.4
       , tagset-positional >= 0.3 && < 0.4
       , crf-chain2-tiers >= 0.1 && < 0.2
       , monad-codec >= 0.2 && < 0.3
@@ -50,7 +50,6 @@ library
       , NLP.Concraft.Disamb
 
     other-modules:
---         NLP.Concraft.Disamb.Tiered
         NLP.Concraft.Disamb.Positional
       , NLP.Concraft.Morphosyntax.Align
       , NLP.Concraft.Format.Temp

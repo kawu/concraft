@@ -20,7 +20,6 @@ import           Control.Monad (when)
 import           Data.Binary (Binary, put, get)
 import qualified Data.Binary as Binary
 import           Data.Aeson
-import           Data.Maybe (fromJust)
 import qualified System.IO.Temp as Temp
 import qualified Data.ByteString.Lazy as BL
 import qualified Codec.Compression.GZip as GZip
@@ -105,27 +104,27 @@ train
     -> G.TrainConf      -- ^ Guessing model training configuration
     -> D.TrainConf      -- ^ Disambiguation model training configuration
     -> [SentO w P.Tag]  -- ^ Training data
-    -> Maybe [SentO w P.Tag]  -- ^ Maybe evaluation data
+    -> [SentO w P.Tag]  -- ^ Evaluation data
     -> IO Concraft
 train tagset ana guessNum guessConf disambConf train0 eval0 = do
+    Temp.withTempDirectory "." ".tmp" $ \tmpDir -> do
+    let temp = withTemp tagset tmpDir
+
     putStrLn "\n===== Reanalysis ====="
     trainR <- reAnaPar tagset ana train0
-    evalR  <- case eval0 of
-            Just ev -> Just <$> reAnaPar tagset ana ev
-            Nothing -> return Nothing
-    withTemp tagset "train" trainR $ \trainR'IO -> do
-    withTemp' tagset "eval" evalR  $ \evalR'IO  -> do
+    evalR  <- reAnaPar tagset ana eval0
+    temp "train-reana" trainR $ \trainR'IO -> do
+    temp "eval-reana"  evalR  $ \evalR'IO  -> do
 
     putStrLn "\n===== Train guessing model ====="
-    guesser <- do
-        tr <- trainR'IO
-        ev <- evalR'IO
-        G.train guessConf tr ev
-    trainG <-       map (G.guessSent guessNum guesser)  <$> trainR'IO
-    evalG  <- fmap (map (G.guessSent guessNum guesser)) <$> evalR'IO
+    guesser <- G.train guessConf trainR'IO evalR'IO
+    trainG  <- map (G.guessSent guessNum guesser) <$> trainR'IO
+    evalG   <- map (G.guessSent guessNum guesser) <$> evalR'IO
+    temp "train-guessed" trainG $ \trainG'IO -> do
+    temp "eval-guessed"  evalG  $ \evalG'IO  -> do
 
     putStrLn "\n===== Train disambiguation model ====="
-    disamb <- D.train disambConf trainG evalG
+    disamb <- D.train disambConf trainG'IO evalG'IO
     return $ Concraft tagset guessNum guesser disamb
 
 
@@ -140,31 +139,16 @@ train tagset ana guessNum guessConf disambConf train0 eval0 = do
 withTemp
     :: (FromJSON w, ToJSON w)
     => P.Tagset
+    -> FilePath                     -- ^ Directory to create the file in
     -> String                       -- ^ Template for `Temp.withTempFile`
     -> [Sent w P.Tag]               -- ^ Input dataset
     -> (IO [Sent w P.Tag] -> IO a)  -- ^ Handler
     -> IO a
-withTemp tagset tmpl xs handler =
-    withTemp' tagset tmpl (Just xs) (handler . fmap fromJust)
-
-
--- | Similar to `withTemp` but on a `Maybe` dataset.
---
--- Store dataset on a disk and run a handler on a list which is read
--- lazily from the disk.  A temporary file will be automatically
--- deleted after the handler is done.
-withTemp'
-    :: (FromJSON w, ToJSON w)
-    => P.Tagset
-    -> String
-    -> Maybe [Sent w P.Tag]
-    -> (IO (Maybe [Sent w P.Tag]) -> IO a)
-    -> IO a
-withTemp' tagset tmpl (Just xs) handler =
-  Temp.withTempFile "." tmpl $ \tmpPath tmpHandle -> do
+withTemp _      _   _    [] handler = handler (return [])
+withTemp tagset dir tmpl xs handler =
+  Temp.withTempFile dir tmpl $ \tmpPath tmpHandle -> do
     hClose tmpHandle
     let txtSent = mapSent $ P.showTag tagset
         tagSent = mapSent $ P.parseTag tagset
     writePar tmpPath $ map txtSent xs
-    handler (Just . map tagSent <$> readPar tmpPath)
-withTemp' _ _ Nothing handler = handler (return Nothing)
+    handler (map tagSent <$> readPar tmpPath)

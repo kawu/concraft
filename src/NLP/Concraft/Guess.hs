@@ -84,26 +84,27 @@ guessSent guessNum guesser = include (guess guessNum guesser)
 -- | Training configuration.
 data TrainConf = TrainConf
     { schemaConfT   :: SchemaConf
-    , sgdArgsT      :: SGD.SgdArgs }
+    , sgdArgsT      :: SGD.SgdArgs
+    -- | Store SGD dataset on disk.
+    , onDiskT       :: Bool }
 
 -- | Train guesser.
 train
     :: (X.Word w, Ord t)
     => TrainConf            -- ^ Training configuration
-    -> [X.Sent w t]         -- ^ Training data
-    -> Maybe [X.Sent w t]   -- ^ Maybe evaluation data
+    -> IO [X.Sent w t]      -- ^ Training data
+    -> IO [X.Sent w t]      -- ^ Evaluation data
     -> IO (Guesser t)
-train TrainConf{..} trainData evalData'Maybe = do
+train TrainConf{..} trainData evalData = do
     let schema = fromConf schemaConfT
-    crf <- CRF.train sgdArgsT
-        (retSchemed schema trainData)
-        (retSchemed schema <$> evalData'Maybe)
+    crf <- CRF.train sgdArgsT onDiskT
+        (schemed schema <$> trainData)
+        (schemed schema <$> evalData)
         (const CRF.presentFeats)
     return $ Guesser schemaConfT crf
   where
-    retSchemed schema = return . schemed schema
 
--- | Schematized data from the plain file.
+-- | Schematized dataset.
 schemed :: (X.Word w, Ord t) => Schema w t a
         -> [X.Sent w t] -> [CRF.SentL Ob t]
 schemed schema =

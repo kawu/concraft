@@ -99,25 +99,26 @@ disambSent = include . disamb
 data TrainConf = TrainConf
     { tiersT        :: [P.Tier]
     , schemaConfT   :: SchemaConf
-    , sgdArgsT      :: SGD.SgdArgs }
+    , sgdArgsT      :: SGD.SgdArgs
+    -- | Store SGD dataset on disk.
+    , onDiskT       :: Bool }
 
 -- | Train disamb model.
 train
     :: X.Word w
-    => TrainConf                        -- ^ Training configuration
-    -> [X.Sent w T.Tag]                 -- ^ Training data
-    -> Maybe [X.Sent w T.Tag]           -- ^ Maybe evaluation data
-    -> IO Disamb                        -- ^ Resultant model
-train TrainConf{..} trainData evalData'Maybe = do
+    => TrainConf                -- ^ Training configuration
+    -> IO [X.Sent w T.Tag]      -- ^ Training data
+    -> IO [X.Sent w T.Tag]      -- ^ Evaluation data
+    -> IO Disamb                -- ^ Resultant model
+train TrainConf{..} trainData evalData = do
     crf <- CRF.train
         (length tiersT)
-        sgdArgsT
+        sgdArgsT onDiskT
         CRF.selectHidden
-        (retSchemed schema split trainData)
-        (retSchemed schema split <$> evalData'Maybe)
+        (schemed schema split <$> trainData)
+        (schemed schema split <$> evalData)
     return $ Disamb tiersT schemaConfT crf
   where
-    retSchemed sc sp = return . schemed sc sp 
     schema = fromConf schemaConfT
     split  = P.split tiersT
 
