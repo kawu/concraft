@@ -15,6 +15,10 @@ category:           Natural Language Processing
 homepage:           http://zil.ipipan.waw.pl/Concraft
 build-type:         Simple
 
+Flag buildAnaTool
+    Description: Build model analysis tool
+    Default:     False
+
 library
     hs-source-dirs: src
 
@@ -62,12 +66,15 @@ source-repository head
     location: https://github.com/kawu/concraft.git
 
 executable concraft-analyse-model
-    build-depends:
-        cmdargs >= 0.10 && < 0.11
-      , logfloat
-      , Chart
-      , data-accessor
-      , colour
+    if flag(buildAnaTool)
+        build-depends:
+            cmdargs >= 0.10 && < 0.11
+          , logfloat
+          , Chart
+          , data-accessor
+          , colour
+    else
+        buildable: False
     hs-source-dirs: src, tools
     main-is: concraft-analyse-model.hs
     ghc-options: -Wall
