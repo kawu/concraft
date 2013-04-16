@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
+
 module NLP.Concraft.Disamb
 (
 -- * Model
@@ -19,6 +20,7 @@ module NLP.Concraft.Disamb
 , train
 ) where
 
+
 import Control.Applicative ((<$>), (<*>))
 import Data.Maybe (fromJust)
 import Data.List (find)
@@ -33,10 +35,10 @@ import qualified Data.CRF.Chain2.Tiers as CRF
 import NLP.Concraft.Schema hiding (schematize)
 import qualified NLP.Concraft.Morphosyntax as X
 
--- import qualified NLP.Concraft.Disamb.Tiered as Tier
 import qualified NLP.Concraft.Disamb.Positional as P
 import qualified Data.Tagset.Positional as T
 import qualified Numeric.SGD as SGD
+
 
 -- | Schematize the input sentence with according to 'schema' rules.
 schematize :: Schema w [t] a -> X.Sent w [t] -> CRF.Sent Ob t
@@ -50,20 +52,24 @@ schematize schema sent =
     lbs i = X.interpsSet w
         where w = v V.! i
 
+
 -- | A disambiguation model.
 data Disamb = Disamb
     { tiers         :: [P.Tier]
     , schemaConf    :: SchemaConf
     , crf           :: CRF.CRF Ob P.Atom }
 
+
 instance Binary Disamb where
     put Disamb{..} = put tiers >> put schemaConf >> put crf
     get = Disamb <$> get <*> get <*> get
+
 
 -- | Unsplit the complex tag (assuming, that it is one
 -- of the interpretations of the word).
 unSplit :: Eq t => (r -> t) -> X.Seg w r -> t -> r
 unSplit split' word x = fromJust $ find ((==x) . split') (X.interps word)
+
 
 -- | Perform context-sensitive disambiguation.
 disamb :: X.Word w => Disamb -> X.Sent w T.Tag -> [T.Tag]
@@ -79,6 +85,7 @@ disamb Disamb{..} sent
     split   = P.split tiers
     embed   = unSplit split
 
+
 -- | Insert disambiguation results into the sentence.
 include :: (X.Sent w T.Tag -> [T.Tag]) -> X.Sent w T.Tag -> X.Sent w T.Tag
 include f sent =
@@ -90,17 +97,20 @@ include f sent =
         [ (y, if x == y then 1 else 0)
         | y <- X.interps word ]
 
+
 -- | Combine `disamb` with `include`. 
 disambSent :: X.Word w => Disamb -> X.Sent w T.Tag -> X.Sent w T.Tag
 disambSent = include . disamb
+
 
 -- | Training configuration.
 data TrainConf = TrainConf
     { tiersT        :: [P.Tier]
     , schemaConfT   :: SchemaConf
     , sgdArgsT      :: SGD.SgdArgs
-    -- | Store SGD dataset on disk.
-    , onDiskT       :: Bool }
+    , onDiskT       :: Bool
+    , pruneT        :: Maybe Double }
+
 
 -- | Train disamb model.
 train
@@ -110,16 +120,27 @@ train
     -> IO [X.Sent w T.Tag]      -- ^ Evaluation data
     -> IO Disamb                -- ^ Resultant model
 train TrainConf{..} trainData evalData = do
-    crf <- CRF.train
-        (length tiersT)
-        sgdArgsT onDiskT
-        CRF.selectHidden
+    -- Train first model
+    crf <- CRF.train (length tiersT) CRF.selectHidden sgdArgsT onDiskT
         (schemed schema split <$> trainData)
         (schemed schema split <$> evalData)
-    return $ Disamb tiersT schemaConfT crf
+    putStr "\nNumber of features: " >> print (CRF.size crf)
+
+    -- Re-train model if prune parameter is Just
+    reCrf <- case pruneT of
+        Just th -> do 
+            putStrLn "\n===== Prune and retrain disambiguation model ====="
+            crf' <- CRF.reTrain (CRF.prune th crf) sgdArgsT onDiskT
+                (schemed schema split <$> trainData)
+                (schemed schema split <$> evalData)
+            putStr "\nNumber of features: " >> print (CRF.size crf')
+            return crf'
+        Nothing -> return crf
+    return $ Disamb tiersT schemaConfT reCrf
   where
     schema = fromConf schemaConfT
     split  = P.split tiersT
+
 
 -- | Schematized data from the plain file.
 schemed :: Ord t => Schema w [t] a -> (T.Tag -> [t])
