@@ -1,11 +1,14 @@
 {-# LANGUAGE TupleSections #-}
 
+
 -- | Alignment and synchronization.  Currently works only with positional tagsets.
+
 
 module NLP.Concraft.Morphosyntax.Align
 ( align
 , sync
 ) where
+
 
 import           Control.Applicative ((<|>))
 import           Data.Maybe (fromJust)
@@ -18,6 +21,7 @@ import qualified Data.Tagset.Positional as P
 
 import           NLP.Concraft.Morphosyntax
 
+
 -- | Synchronize two datasets, taking disamb tags from the first one
 -- and the rest of information form the second one.
 -- In case of differences in token-level segmentation, reference segmentation
@@ -25,6 +29,7 @@ import           NLP.Concraft.Morphosyntax
 -- correct disamb tags.
 sync :: Word w => P.Tagset -> [Seg w P.Tag] -> [Seg w P.Tag] -> [Seg w P.Tag]
 sync tagset xs ys = concatMap (uncurry (moveDisamb tagset)) (align xs ys)
+
 
 -- | If both arguments contain only one segment, insert disamb interpretations
 -- from the first segment into the second segment.  Otherwise, the first list
@@ -50,6 +55,7 @@ moveDisamb tagset [v] [w] =
 -- Do nothing in this case.
 moveDisamb _ xs _ = xs
 
+
 -- | Align two lists of segments.
 align :: Word w => [Seg w t] -> [Seg w t] -> [([Seg w t], [Seg w t])]
 align [] [] = []
@@ -59,6 +65,7 @@ align xs ys =
     let (x, y) = match xs ys
         rest   = align (drop (length x) xs) (drop (length y) ys)
     in  (x, y) : rest
+
 
 -- | Find the shortest, length-matching prefixes in the two input lists.
 match :: Word w => [Seg w t] -> [Seg w t] -> ([Seg w t], [Seg w t])
