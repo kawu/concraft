@@ -60,3 +60,14 @@ library
 source-repository head
     type: git
     location: https://github.com/kawu/concraft.git
+
+executable concraft-analyse-model
+    build-depends:
+        cmdargs >= 0.10 && < 0.11
+      , logfloat
+      , Chart
+      , data-accessor
+      , colour
+    hs-source-dirs: src, tools
+    main-is: concraft-analyse-model.hs
+    ghc-options: -Wall

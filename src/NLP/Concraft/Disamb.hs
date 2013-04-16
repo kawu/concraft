@@ -4,7 +4,6 @@ module NLP.Concraft.Disamb
 (
 -- * Model
   Disamb (..)
-, CRF.CRF ()
 
 -- * Tiers
 , P.Tier (..)
