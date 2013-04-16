@@ -16,6 +16,7 @@ import           Data.Accessor
 import           Graphics.Rendering.Chart
 
 import qualified Data.CRF.Chain2.Tiers.Model as CRF
+import qualified Data.CRF.Chain2.Tiers.Feature as CRF
 import qualified Data.CRF.Chain2.Tiers as CRF
 
 import qualified NLP.Concraft as C
@@ -51,22 +52,39 @@ drawModel model filePath = do
 
   where
 
-    -- Feature values in log domain
-    vals = map L.logFromLogFloat . M.elems $ CRF.toMap model
+    -- Feature map with values in log domain
+    featMap = L.logFromLogFloat <$> CRF.toMap model
+
+    -- Values assigned to observation features
+    obVals = [x | (ft, x) <- M.assocs featMap, isOFeat ft]
+
+    -- Values assigned to transition features
+    trVals = [x | (ft, x) <- M.assocs featMap, not (isOFeat ft)]
+
+    -- Is it an observation feature?
+    isOFeat (CRF.OFeat _ _ _) = True
+    isOFeat _                 = False
 
     -- Make log-domain histogram
-    xs = map (second intLog) . M.toList . hist $ map (roundTo 2) vals
+    mkHist = map (second intLog) . M.toList . hist . map (roundTo 2)
 
-    chart =
+    obChart =
           plot_lines_style .> line_color ^= opaque blue
-        $ plot_lines_values ^= [xs]
+        $ plot_lines_values ^= [mkHist obVals]
+        $ plot_lines_title ^= "Observation features"
+        $ defaultPlotLines
+
+    trChart =
+          plot_lines_style .> line_color ^= opaque green
+        $ plot_lines_values ^= [mkHist trVals]
+        $ plot_lines_title ^= "Transition features"
         $ defaultPlotLines
 
     layout =
           layout1_left_axis ^: laxis_override ^= axisGridHide
         $ layout1_right_axis ^: laxis_override ^= axisGridHide
         $ layout1_bottom_axis ^: laxis_override ^= axisGridHide
-        $ layout1_plots ^= [Left (toPlot chart)]
+        $ layout1_plots ^= [Left (toPlot obChart), Right (toPlot trChart)]
         $ layout1_grid_last ^= False
         $ defaultLayout1
 
