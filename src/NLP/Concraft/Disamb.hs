@@ -120,6 +120,7 @@ train
     -> IO [X.Sent w T.Tag]      -- ^ Evaluation data
     -> IO Disamb                -- ^ Resultant model
 train TrainConf{..} trainData evalData = do
+
     -- Train first model
     crf <- CRF.train (length tiersT) CRF.selectHidden sgdArgsT onDiskT
         (schemed schema split <$> trainData)
@@ -130,16 +131,26 @@ train TrainConf{..} trainData evalData = do
     reCrf <- case pruneT of
         Just th -> do 
             putStrLn "\n===== Prune and retrain disambiguation model ====="
-            crf' <- CRF.reTrain (CRF.prune th crf) sgdArgsT onDiskT
+            crf' <- CRF.reTrain (CRF.prune th crf)
+                (gainMul 0.5 sgdArgsT) onDiskT
                 (schemed schema split <$> trainData)
                 (schemed schema split <$> evalData)
             putStr "\nNumber of features: " >> print (CRF.size crf')
             return crf'
         Nothing -> return crf
+
+    -- Final disamb model
     return $ Disamb tiersT schemaConfT reCrf
+
   where
+
     schema = fromConf schemaConfT
     split  = P.split tiersT
+
+    -- Muliply gain0 parameter by the given number.
+    gainMul x sgdArgs =
+        let gain0' = SGD.gain0 sgdArgs * x
+        in  sgdArgs { SGD.gain0 = gain0' }
 
 
 -- | Schematized data from the plain file.
