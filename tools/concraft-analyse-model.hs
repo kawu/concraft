@@ -45,8 +45,8 @@ hist =
 ---------------------------------------
 
 
-drawModel :: CRF.Model -> FilePath -> IO ()
-drawModel model filePath = do
+drawModel :: Int -> CRF.Model -> FilePath -> IO ()
+drawModel rnParam model filePath = do
 
     void $ renderableToPNGFile (toRenderable layout) 640 480 filePath
 
@@ -66,7 +66,7 @@ drawModel model filePath = do
     isOFeat _                 = False
 
     -- Make log-domain histogram
-    mkHist = map (second intLog) . M.toList . hist . map (roundTo 2)
+    mkHist = map (second intLog) . M.toList . hist . map (roundTo rnParam)
 
     obChart =
           plot_lines_style .> line_color ^= opaque blue
@@ -101,14 +101,16 @@ intLog = (log :: Double -> Double) . fromIntegral
 
 data AnaModel = AnaModel
     { inModel   :: FilePath
-    , outFile   :: FilePath }
+    , outFile   :: FilePath
+    , rnParam   :: Int }
     deriving (Data, Typeable, Show)
 
 
 anaModel :: AnaModel
 anaModel = AnaModel
     { inModel = def &= argPos 0 &= typ "MODEL-FILE"
-    , outFile = def &= argPos 1 &= typ "OUTPUT-FILE" }
+    , outFile = def &= argPos 1 &= typ "OUTPUT-FILE"
+    , rnParam = 1 &= help "Rounding parameter" }
 
 
 ---------------------------------------
@@ -123,4 +125,4 @@ main = exec =<< cmdArgs anaModel
 exec :: AnaModel -> IO ()
 exec AnaModel{..} = do
     model <- CRF.model . D.crf . C.disamb <$> C.loadModel inModel
-    drawModel model outFile
+    drawModel rnParam model outFile
