@@ -15,7 +15,7 @@ module NLP.Concraft.Analysis
 ) where
 
 
-import System.IO.Unsafe (unsafeInterleaveIO)
+import qualified Control.Monad.LazyIO as LazyIO
 import qualified Data.Text.Lazy as L
 
 import           NLP.Concraft.Morphosyntax
@@ -60,15 +60,7 @@ reAnaSent tagset ana sent = do
 -- | Reanalyse paragraph.
 reAnaPar :: Word w => P.Tagset -> Analyse w P.Tag
          -> [SentO w P.Tag] -> IO [Sent w P.Tag]
-reAnaPar tagset ana = lazyMapM (reAnaSent tagset ana)
-
-
-lazyMapM :: (a -> IO b) -> [a] -> IO [b]
-lazyMapM f (x:xs) = do
-    y <- f x
-    ys <- unsafeInterleaveIO $ lazyMapM f xs
-    return (y:ys)
-lazyMapM _ [] = return []
+reAnaPar tagset ana = LazyIO.mapM (reAnaSent tagset ana)
 
 
 ---------------------

@@ -1,5 +1,5 @@
 name:               concraft
-version:            0.7.0
+version:            0.7.1
 synopsis:           Morphological disambiguation based on constrained CRFs
 description:
     A morphological disambiguation library based on
@@ -32,11 +32,11 @@ library
       , text-binary >= 0.1 && < 0.2
       , vector
       , vector-binary
-      , crf-chain1-constrained >= 0.2 && < 0.3
       , monad-ox >= 0.3 && < 0.4
-      , sgd >= 0.3 && < 0.4
+      , sgd >= 0.3.2 && < 0.4
       , tagset-positional >= 0.3 && < 0.4
-      , crf-chain2-tiers >= 0.1 && < 0.2
+      , crf-chain1-constrained >= 0.2.1 && < 0.3
+      , crf-chain2-tiers >= 0.1.1 && < 0.2
       , monad-codec >= 0.2 && < 0.3
       , data-lens
       , transformers
@@ -44,6 +44,7 @@ library
       , temporary
       , aeson >= 0.6 && < 0.7
       , zlib >= 0.5 && < 0.6
+      , lazy-io
 
     exposed-modules:
         NLP.Concraft
