@@ -139,7 +139,7 @@ train tagset guessNum guessConf disambConf trainR'IO evalR'IO = do
     trainG  <- map (G.guessSent guessNum guesser) <$> trainR'IO
     evalG   <- map (G.guessSent guessNum guesser) <$> evalR'IO
     temp "train" trainG $ \trainG'IO -> do
-    temp "eval"  evalG  $ \evalG'IO  -> d
+    temp "eval"  evalG  $ \evalG'IO  -> do
 
     putStrLn "\n===== Train disambiguation model ====="
     disamb <- D.train disambConf trainG'IO evalG'IO
