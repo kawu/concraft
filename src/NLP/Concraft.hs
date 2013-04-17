@@ -12,6 +12,7 @@ module NLP.Concraft
 
 -- * Training
 , train
+, reAnaTrain
 ) where
 
 import           System.IO (hClose)
@@ -38,7 +39,7 @@ import qualified NLP.Concraft.Disamb as D
 
 
 modelVersion :: String
-modelVersion = "0.5"
+modelVersion = "0.7"
 
 
 -- | Concraft data.
@@ -94,39 +95,56 @@ tag Concraft{..} = D.disamb disamb . G.guessSent guessNum guesser
 ---------------------
 
 
--- INFO: We take an input dataset as a list, since it is read only once.
-
--- | Train guessing and disambiguation models.
-train
+-- | Train guessing and disambiguation models after dataset reanalysis.
+reAnaTrain
     :: (Word w, FromJSON w, ToJSON w)
-    => P.Tagset         -- ^ Tagset
-    -> Analyse w P.Tag  -- ^ Analysis function
-    -> Int              -- ^ Numer of guessed tags for each word 
-    -> G.TrainConf      -- ^ Guessing model training configuration
-    -> D.TrainConf      -- ^ Disambiguation model training configuration
-    -> [SentO w P.Tag]  -- ^ Training data
-    -> [SentO w P.Tag]  -- ^ Evaluation data
+    => P.Tagset             -- ^ Tagset
+    -> Analyse w P.Tag      -- ^ Analysis function
+    -> Int                  -- ^ Numer of guessed tags for each word 
+    -> G.TrainConf          -- ^ Guessing model training configuration
+    -> D.TrainConf          -- ^ Disambiguation model training configuration
+    -> IO [SentO w P.Tag]   -- ^ Training data
+    -> IO [SentO w P.Tag]   -- ^ Evaluation data
     -> IO Concraft
-train tagset ana guessNum guessConf disambConf train0 eval0 = do
-    Temp.withTempDirectory "." ".tmp" $ \tmpDir -> do
+reAnaTrain tagset ana guessNum guessConf disambConf train0'IO eval0'IO = do
+    Temp.withTempDirectory "." ".reana" $ \tmpDir -> do
     let temp = withTemp tagset tmpDir
 
     putStrLn "\n===== Reanalysis ====="
-    trainR <- reAnaPar tagset ana train0
-    evalR  <- reAnaPar tagset ana eval0
-    temp "train-reana" trainR $ \trainR'IO -> do
-    temp "eval-reana"  evalR  $ \evalR'IO  -> do
+    trainR <- reAnaPar tagset ana =<< train0'IO
+    evalR  <- reAnaPar tagset ana =<< eval0'IO
+
+    temp "train" trainR $ \trainR'IO -> do
+    temp "eval"  evalR  $ \evalR'IO  -> do
+    train tagset guessNum guessConf disambConf trainR'IO evalR'IO
+
+
+-- | Train guessing and disambiguation models.
+-- No reanalysis will be performed.
+train
+    :: (Word w, FromJSON w, ToJSON w)
+    => P.Tagset             -- ^ Tagset
+    -> Int                  -- ^ Numer of guessed tags for each word
+    -> G.TrainConf          -- ^ Guessing model training configuration
+    -> D.TrainConf          -- ^ Disambiguation model training configuration
+    -> IO [Sent w P.Tag]    -- ^ Training data
+    -> IO [Sent w P.Tag]    -- ^ Evaluation data
+    -> IO Concraft
+train tagset guessNum guessConf disambConf trainR'IO evalR'IO = do
+    Temp.withTempDirectory "." ".guessed" $ \tmpDir -> do
+    let temp = withTemp tagset tmpDir
 
     putStrLn "\n===== Train guessing model ====="
     guesser <- G.train guessConf trainR'IO evalR'IO
     trainG  <- map (G.guessSent guessNum guesser) <$> trainR'IO
     evalG   <- map (G.guessSent guessNum guesser) <$> evalR'IO
-    temp "train-guessed" trainG $ \trainG'IO -> do
-    temp "eval-guessed"  evalG  $ \evalG'IO  -> do
+    temp "train" trainG $ \trainG'IO -> do
+    temp "eval"  evalG  $ \evalG'IO  -> d
 
     putStrLn "\n===== Train disambiguation model ====="
     disamb <- D.train disambConf trainG'IO evalG'IO
     return $ Concraft tagset guessNum guesser disamb
+
 
 
 ---------------------
