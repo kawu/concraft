@@ -33,7 +33,7 @@ roundTo :: Int -> Double -> Double
 roundTo n x = (fromInteger $ round $ x * (10^n)) / (10.0^^n)
 
 
--- | Make a histogram with a given precision.
+-- | Make a histogram from input list.
 hist :: Ord a => [a] -> M.Map a Int
 hist =
     let update m x = M.insertWith' (+) x 1 m
