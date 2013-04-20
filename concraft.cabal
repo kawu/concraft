@@ -72,9 +72,6 @@ executable concraft-analyse-model
         build-depends:
             cmdargs >= 0.10 && < 0.11
           , logfloat
-          , Chart
-          , data-accessor
-          , colour
     else
         buildable: False
     hs-source-dirs: src, tools

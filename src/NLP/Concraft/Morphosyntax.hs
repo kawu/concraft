@@ -15,7 +15,7 @@ module NLP.Concraft.Morphosyntax
 , interpsSet
 , interps
 
--- * Word classes
+-- * Word class
 , Word (..)
 
 -- * Sentence
@@ -85,7 +85,7 @@ interps = S.toList . interpsSet
 
 
 --------------------------
--- Word classes
+-- Word class
 --------------------------
 
 
