@@ -13,6 +13,7 @@ module NLP.Concraft.Guess
 
 -- * Training
 , TrainConf (..)
+, R0T (..)
 , train
 ) where
 
@@ -90,24 +91,23 @@ guessSent :: (X.Word w, Ord t)
 guessSent guessNum guesser = include (guess guessNum guesser)
 
 
+-- | Method of constructing the default set of labels (R0).
+data R0T
+    = AnyInterps        -- ^ `CRF.anyInterps` 
+    | AnyChosen         -- ^ `CRF.anyChosen`
+    | OovChosen         -- ^ `CRF.oovChosen`
+    deriving (Show, Eq, Ord, Enum)
+
+
 -- | Training configuration.
 data TrainConf = TrainConf
     { schemaConfT   :: SchemaConf
-
+    -- | SGD parameters.
     , sgdArgsT      :: SGD.SgdArgs
-
-    -- | Store SGD dataset on disk.
+    -- | Store SGD dataset on disk
     , onDiskT       :: Bool
-
-    -- | R0 construction parameter:
-    --
-    --   * 0 -- `CRF.anyInterps` 
-    --
-    --   * 1 -- `CRF.anyChosen`
-    --
-    -- and `CRF.oovChosen` otherwise.
-    --
-    , r0T           :: Int }
+    -- | R0 construction method
+    , r0T           :: R0T }
 
 
 -- | Train guesser.
@@ -120,9 +120,9 @@ train
 train TrainConf{..} trainData evalData = do
     let schema = fromConf schemaConfT
         mkR0   = case r0T of
-            0   -> CRF.anyInterps
-            1   -> CRF.anyChosen
-            _   -> CRF.oovChosen
+            AnyInterps  -> CRF.anyInterps
+            AnyChosen   -> CRF.anyChosen
+            OovChosen   -> CRF.oovChosen
     crf <- CRF.train sgdArgsT onDiskT
         mkR0 (const CRF.presentFeats)
         (schemed schema <$> trainData)
