@@ -93,9 +93,9 @@ guessSent guessNum guesser = include (guess guessNum guesser)
 
 -- | Method of constructing the default set of labels (R0).
 data R0T
-    = AnyInterps        -- ^ `CRF.anyInterps` 
-    | AnyChosen         -- ^ `CRF.anyChosen`
-    | OovChosen         -- ^ `CRF.oovChosen`
+    = AnyInterps        -- ^ See `CRF.anyInterps` 
+    | AnyChosen         -- ^ See `CRF.anyChosen`
+    | OovChosen         -- ^ See `CRF.oovChosen`
     deriving (Show, Eq, Ord, Enum)
 
 
