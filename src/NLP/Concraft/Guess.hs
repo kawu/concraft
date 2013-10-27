@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 
 module NLP.Concraft.Guess
@@ -22,6 +23,7 @@ import Prelude hiding (words)
 import Control.Applicative ((<$>), (<*>))
 import Data.Binary (Binary, put, get)
 import Data.Text.Binary ()
+import System.Console.CmdArgs
 import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Vector as V
@@ -96,7 +98,7 @@ data R0T
     = AnyInterps        -- ^ See `CRF.anyInterps` 
     | AnyChosen         -- ^ See `CRF.anyChosen`
     | OovChosen         -- ^ See `CRF.oovChosen`
-    deriving (Show, Eq, Ord, Enum)
+    deriving (Show, Eq, Ord, Enum, Typeable, Data)
 
 
 -- | Training configuration.
