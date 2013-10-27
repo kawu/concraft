@@ -138,4 +138,5 @@ schemed schema =
   where
     onSent xs =
         let mkProb = CRF.mkProb . M.toList . X.unWMap . X.tags
-        in  zip (schematize schema xs) (map mkProb xs)
+        in  map (uncurry CRF.mkWordL) $
+            zip (schematize schema xs) (map mkProb xs)
