@@ -14,7 +14,7 @@ module NLP.Concraft.Disamb.Tiered
 ) where
 
 import Control.Applicative ((<$>), (<*>))
-import Control.Comonad.Trans.Store (store)
+import Control.Comonad.Store (store)
 import Control.Monad (guard)
 import Data.Ix (Ix, inRange, range)
 import Data.Maybe (catMaybes, fromJust)
