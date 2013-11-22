@@ -89,10 +89,22 @@ loadModel path = do
 
 -- | Tag sentence using the model.  In your code you should probably
 -- use your analysis function, translate results into a container of
--- `Sent`ences, evaluate `tagSent` on each sentence and embed the
+-- `Sent`ences, evaluate `tag` on each sentence and embed the
 -- tagging results into morphosyntactic structure of your own.
-tag :: Word w => Concraft -> Sent w P.Tag -> [P.Tag]
-tag Concraft{..} = D.disamb disamb . G.guessSent guessNum guesser
+--
+-- The function returns guessing results as `fst` elements
+-- of the output pairs and disambiguation results as `snd`
+-- elements of the corresponding pairs.
+tag :: Word w => Concraft -> Sent w P.Tag -> [([P.Tag], P.Tag)]
+tag Concraft{..} sent =
+    zip gss tgs
+  where
+    gss = G.guess guessNum guesser sent
+    tgs = D.disamb disamb (G.include gss sent)
+
+
+-- tag :: Word w => Concraft -> Sent w P.Tag -> [P.Tag]
+-- tag Concraft{..} = D.disamb disamb . G.guessSent guessNum guesser
 
 
 ---------------------
