@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
+
 module NLP.Concraft
 (
 -- * Model 
@@ -13,7 +14,11 @@ module NLP.Concraft
 -- * Training
 , train
 , reAnaTrain
+
+-- * Pruning
+, prune
 ) where
+
 
 import           System.IO (hClose)
 import           Control.Applicative ((<$>), (<*>))
@@ -145,6 +150,18 @@ train tagset guessNum guessConf disambConf trainR'IO evalR'IO = do
     disamb <- D.train disambConf trainG'IO evalG'IO
     return $ Concraft tagset guessNum guesser disamb
 
+
+---------------------
+-- Pruning
+---------------------
+
+
+-- | Prune disambiguation model: discard model features with absolute values
+-- (in log-domain) lower than the given threshold.
+prune :: Double -> Concraft -> Concraft
+prune x concraft =
+    let disamb' = D.prune x (disamb concraft)
+    in  concraft { disamb = disamb' }
 
 
 ---------------------
