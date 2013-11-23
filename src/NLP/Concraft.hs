@@ -10,7 +10,7 @@ module NLP.Concraft
 
 -- * Tagging
 , tag
-, probs
+, marginals
 
 -- * Training
 , train
@@ -105,14 +105,14 @@ tag Concraft{..} sent =
     tgs = D.disamb disamb (G.include gss sent)
 
 
--- | Determine probabilities corresponding to individual tags
--- within the disambiguation model.  Since the guessing model
--- is used at first, the resulting weighted maps may contain
--- tags not present in the input sentence.
-probs :: Word w => Concraft -> Sent w P.Tag -> [WMap P.Tag]
-probs Concraft{..} sent =
+-- | Determine marginal probabilities corresponding to individual
+-- tags w.r.t. the disambiguation model.  Since the guessing model
+-- is used first, the resulting weighted maps may contain tags
+-- not present in the input sentence.
+marginals :: Word w => Concraft -> Sent w P.Tag -> [WMap P.Tag]
+marginals Concraft{..} sent =
     let gss = G.guess guessNum guesser sent
-    in  D.probs disamb (G.include gss sent)
+    in  D.marginals disamb (G.include gss sent)
 
 
 ---------------------

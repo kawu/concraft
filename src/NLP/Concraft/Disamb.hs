@@ -11,7 +11,7 @@ module NLP.Concraft.Disamb
 , P.Atom (..)
 
 -- * Disambiguation
-, probs
+, marginals
 , disamb
 , include
 , disambSent
@@ -110,13 +110,12 @@ disambSent :: X.Word w => Disamb -> X.Sent w T.Tag -> X.Sent w T.Tag
 disambSent = include . disamb
 
 
--- | Tag input tags corresponding to individual segments
--- with probabilities (in log-domain).
-probs :: X.Word w => Disamb -> X.Sent w T.Tag -> [X.WMap T.Tag]
-probs Disamb{..} sent
+-- | Tag labels with marginal probabilities.
+marginals :: X.Word w => Disamb -> X.Sent w T.Tag -> [X.WMap T.Tag]
+marginals Disamb{..} sent
     = map (uncurry embed)
     . zip sent
-    . CRF.probs crf
+    . CRF.marginals crf
     . schematize schema
     . X.mapSent split
     $ sent
