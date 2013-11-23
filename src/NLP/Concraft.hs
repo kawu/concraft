@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
+
 module NLP.Concraft
 (
 -- * Model 
@@ -9,15 +10,21 @@ module NLP.Concraft
 
 -- * Tagging
 , tag
+, marginals
 
 -- * Training
 , train
 , reAnaTrain
+
+-- * Pruning
+, prune
 ) where
+
 
 import           System.IO (hClose)
 import           Control.Applicative ((<$>), (<*>))
 import           Control.Monad (when)
+import qualified Data.Set as S
 import           Data.Binary (Binary, put, get)
 import qualified Data.Binary as Binary
 import           Data.Aeson
@@ -84,10 +91,28 @@ loadModel path = do
 
 -- | Tag sentence using the model.  In your code you should probably
 -- use your analysis function, translate results into a container of
--- `Sent`ences, evaluate `tagSent` on each sentence and embed the
--- tagging results into morphosyntactic structure of your own.
-tag :: Word w => Concraft -> Sent w P.Tag -> [P.Tag]
-tag Concraft{..} = D.disamb disamb . G.guessSent guessNum guesser
+-- `Sent`ences, evaluate `tag` on each sentence and embed the
+-- tagging results into the morphosyntactic structure of your own.
+--
+-- The function returns guessing results as `fst` elements
+-- of the output pairs and disambiguation results as `snd`
+-- elements of the corresponding pairs.
+tag :: Word w => Concraft -> Sent w P.Tag -> [(S.Set P.Tag, P.Tag)]
+tag Concraft{..} sent =
+    zip (map S.fromList gss) tgs
+  where
+    gss = G.guess guessNum guesser sent
+    tgs = D.disamb disamb (G.include gss sent)
+
+
+-- | Determine marginal probabilities corresponding to individual
+-- tags w.r.t. the disambiguation model.  Since the guessing model
+-- is used first, the resulting weighted maps may contain tags
+-- not present in the input sentence.
+marginals :: Word w => Concraft -> Sent w P.Tag -> [WMap P.Tag]
+marginals Concraft{..} sent =
+    let gss = G.guess guessNum guesser sent
+    in  D.marginals disamb (G.include gss sent)
 
 
 ---------------------
@@ -102,7 +127,7 @@ reAnaTrain
     -> Analyse w P.Tag      -- ^ Analysis function
     -> Int                  -- ^ Numer of guessed tags for each word 
     -> G.TrainConf          -- ^ Guessing model training configuration
-    -> D.TrainConf          -- ^ Disambiguation model training configuration
+    -> D.TrainConf          -- ^ Disamb model training configuration
     -> IO [SentO w P.Tag]   -- ^ Training data
     -> IO [SentO w P.Tag]   -- ^ Evaluation data
     -> IO Concraft
@@ -126,7 +151,7 @@ train
     => P.Tagset             -- ^ Tagset
     -> Int                  -- ^ Numer of guessed tags for each word
     -> G.TrainConf          -- ^ Guessing model training configuration
-    -> D.TrainConf          -- ^ Disambiguation model training configuration
+    -> D.TrainConf          -- ^ Disamb model training configuration
     -> IO [Sent w P.Tag]    -- ^ Training data
     -> IO [Sent w P.Tag]    -- ^ Evaluation data
     -> IO Concraft
@@ -145,6 +170,18 @@ train tagset guessNum guessConf disambConf trainR'IO evalR'IO = do
     disamb <- D.train disambConf trainG'IO evalG'IO
     return $ Concraft tagset guessNum guesser disamb
 
+
+---------------------
+-- Pruning
+---------------------
+
+
+-- | Prune disambiguation model: discard model features with
+-- absolute values (in log-domain) lower than the given threshold.
+prune :: Double -> Concraft -> Concraft
+prune x concraft =
+    let disamb' = D.prune x (disamb concraft)
+    in  concraft { disamb = disamb' }
 
 
 ---------------------

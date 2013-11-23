@@ -62,7 +62,9 @@ schematize schema sent =
         where w = v V.! i
 
 
--- | Determine 'k' most probable labels for each word in the sentence.
+-- | Determine the 'k' most probable labels for each word in the sentence.
+-- TODO: Perhaps it would be better to use sets instead of lists
+-- as output?
 guess :: (X.Word w, Ord t)
       => Int -> Guesser t -> X.Sent w t -> [[t]]
 guess k gsr sent =
@@ -71,9 +73,8 @@ guess k gsr sent =
 
 
 -- | Insert guessing results into the sentence.
-include :: (X.Word w, Ord t) => (X.Sent w t -> [[t]])
-        -> X.Sent w t -> X.Sent w t
-include f sent =
+include :: (X.Word w, Ord t) => [[t]] -> X.Sent w t -> X.Sent w t
+include xss sent =
     [ word { X.tags = tags }
     | (word, tags) <- zip sent sentTags ]
   where
@@ -81,7 +82,7 @@ include f sent =
         [ if X.oov word
             then addInterps (X.tags word) xs
             else X.tags word
-        | (xs, word) <- zip (f sent) sent ]
+        | (xs, word) <- zip xss sent ]
     addInterps wm xs = X.mkWMap
         $  M.toList (X.unWMap wm)
         ++ zip xs [0, 0 ..]
@@ -90,7 +91,8 @@ include f sent =
 -- | Combine `guess` with `include`. 
 guessSent :: (X.Word w, Ord t)
           => Int -> Guesser t -> X.Sent w t -> X.Sent w t
-guessSent guessNum guesser = include (guess guessNum guesser)
+guessSent guessNum guesser sent =
+    include (guess guessNum guesser sent) sent
 
 
 -- | Method of constructing the default set of labels (R0).

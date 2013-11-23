@@ -34,6 +34,7 @@ module NLP.Concraft.Morphosyntax
 import           Control.Applicative ((<$>), (<*>))
 import           Control.Arrow (first)
 import           Data.Aeson
+import           Data.Binary (Binary)
 import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Text as T
@@ -134,7 +135,7 @@ mapSentO f x =
 -- | A set with a non-negative weight assigned to each of
 -- its elements.
 newtype WMap a = WMap { unWMap :: M.Map a Double }
-    deriving (Show, Eq, Ord)
+    deriving (Show, Eq, Ord, Binary)
 
 
 -- | Make a weighted collection.  Negative elements will be ignored.

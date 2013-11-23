@@ -11,6 +11,7 @@ module NLP.Concraft.Disamb
 , P.Atom (..)
 
 -- * Disambiguation
+, marginals
 , disamb
 , include
 , disambSent
@@ -18,11 +19,13 @@ module NLP.Concraft.Disamb
 -- * Training
 , TrainConf (..)
 , train
+
+-- * Pruning
+, prune
 ) where
 
 
 import Control.Applicative ((<$>), (<*>))
-import Data.Maybe (fromJust)
 import Data.List (find)
 import Data.Binary (Binary, put, get)
 import qualified Data.Set as S
@@ -68,7 +71,11 @@ instance Binary Disamb where
 -- | Unsplit the complex tag (assuming, that it is one
 -- of the interpretations of the word).
 unSplit :: Eq t => (r -> t) -> X.Seg w r -> t -> r
-unSplit split' word x = fromJust $ find ((==x) . split') (X.interps word)
+unSplit split' word x = case jy of
+    Just y  -> y
+    Nothing -> error "unSplit: no such interpretation"
+  where
+    jy = find ((==x) . split') (X.interps word)
 
 
 -- | Perform context-sensitive disambiguation.
@@ -103,13 +110,40 @@ disambSent :: X.Word w => Disamb -> X.Sent w T.Tag -> X.Sent w T.Tag
 disambSent = include . disamb
 
 
+-- | Tag labels with marginal probabilities.
+marginals :: X.Word w => Disamb -> X.Sent w T.Tag -> [X.WMap T.Tag]
+marginals Disamb{..} sent
+    = map (uncurry embed)
+    . zip sent
+    . CRF.marginals crf
+    . schematize schema
+    . X.mapSent split
+    $ sent
+  where
+    schema  = fromConf schemaConf
+    split   = P.split tiers
+    embed w = X.mkWMap . zip (X.interps w)
+
+
+-- | Prune disamb model: discard model features with absolute values
+-- (in log-domain) lower than the given threshold.
+prune :: Double -> Disamb -> Disamb
+prune x dmb =
+    let crf' = CRF.prune x (crf dmb)
+    in  dmb { crf = crf' }
+
+
 -- | Training configuration.
-data TrainConf = TrainConf
-    { tiersT        :: [P.Tier]
-    , schemaConfT   :: SchemaConf
-    , sgdArgsT      :: SGD.SgdArgs
-    , onDiskT       :: Bool
-    , pruneT        :: Maybe Double }
+data TrainConf
+    = TrainConf
+        { tiersT        :: [P.Tier]
+        , schemaConfT   :: SchemaConf
+        , sgdArgsT      :: SGD.SgdArgs
+        , onDiskT       :: Bool }
+    | ReTrainConf
+        { initDmb       :: Disamb
+        , sgdArgsT      :: SGD.SgdArgs
+        , onDiskT       :: Bool }
 
 
 -- | Train disamb model.
@@ -120,37 +154,26 @@ train
     -> IO [X.Sent w T.Tag]      -- ^ Evaluation data
     -> IO Disamb                -- ^ Resultant model
 train TrainConf{..} trainData evalData = do
-
-    -- Train first model
     crf <- CRF.train (length tiersT) CRF.selectHidden sgdArgsT onDiskT
         (schemed schema split <$> trainData)
         (schemed schema split <$> evalData)
     putStr "\nNumber of features: " >> print (CRF.size crf)
-
-    -- Re-train model if prune parameter is Just
-    reCrf <- case pruneT of
-        Just th -> do 
-            putStrLn "\n===== Prune and retrain disambiguation model ====="
-            crf' <- CRF.reTrain (CRF.prune th crf)
-                (gainMul 0.5 sgdArgsT) onDiskT
-                (schemed schema split <$> trainData)
-                (schemed schema split <$> evalData)
-            putStr "\nNumber of features: " >> print (CRF.size crf')
-            return crf'
-        Nothing -> return crf
-
-    -- Final disamb model
-    return $ Disamb tiersT schemaConfT reCrf
-
+    return $ Disamb tiersT schemaConfT crf
   where
-
     schema = fromConf schemaConfT
     split  = P.split tiersT
 
-    -- Muliply gain0 parameter by the given number.
-    gainMul x sgdArgs =
-        let gain0' = SGD.gain0 sgdArgs * x
-        in  sgdArgs { SGD.gain0 = gain0' }
+-- Improve disamb model.
+train ReTrainConf{..} trainData evalData = do
+    crf' <- CRF.reTrain crf sgdArgsT onDiskT
+        (schemed schema split <$> trainData)
+        (schemed schema split <$> evalData)
+    putStr "\nNumber of features: " >> print (CRF.size crf')
+    return $ initDmb { crf = crf' }
+  where
+    Disamb{..} = initDmb
+    schema = fromConf schemaConf
+    split  = P.split tiers
 
 
 -- | Schematized data from the plain file.
