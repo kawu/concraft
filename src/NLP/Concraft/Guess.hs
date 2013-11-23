@@ -63,6 +63,8 @@ schematize schema sent =
 
 
 -- | Determine the 'k' most probable labels for each word in the sentence.
+-- TODO: Perhaps it would be better to use sets instead of lists
+-- as output?
 guess :: (X.Word w, Ord t)
       => Int -> Guesser t -> X.Sent w t -> [[t]]
 guess k gsr sent =

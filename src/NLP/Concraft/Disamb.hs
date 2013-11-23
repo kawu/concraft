@@ -11,6 +11,7 @@ module NLP.Concraft.Disamb
 , P.Atom (..)
 
 -- * Disambiguation
+, probs
 , disamb
 , include
 , disambSent
@@ -25,7 +26,6 @@ module NLP.Concraft.Disamb
 
 
 import Control.Applicative ((<$>), (<*>))
-import Data.Maybe (fromJust)
 import Data.List (find)
 import Data.Binary (Binary, put, get)
 import qualified Data.Set as S
@@ -71,7 +71,11 @@ instance Binary Disamb where
 -- | Unsplit the complex tag (assuming, that it is one
 -- of the interpretations of the word).
 unSplit :: Eq t => (r -> t) -> X.Seg w r -> t -> r
-unSplit split' word x = fromJust $ find ((==x) . split') (X.interps word)
+unSplit split' word x = case jy of
+    Just y  -> y
+    Nothing -> error "unSplit: no such interpretation"
+  where
+    jy = find ((==x) . split') (X.interps word)
 
 
 -- | Perform context-sensitive disambiguation.
@@ -104,6 +108,22 @@ include f sent =
 -- | Combine `disamb` with `include`. 
 disambSent :: X.Word w => Disamb -> X.Sent w T.Tag -> X.Sent w T.Tag
 disambSent = include . disamb
+
+
+-- | Tag input tags corresponding to individual segments
+-- with probabilities (in log-domain).
+probs :: X.Word w => Disamb -> X.Sent w T.Tag -> [X.WMap T.Tag]
+probs Disamb{..} sent
+    = map (uncurry embed)
+    . zip sent
+    . CRF.probs crf
+    . schematize schema
+    . X.mapSent split
+    $ sent
+  where
+    schema  = fromConf schemaConf
+    split   = P.split tiers
+    embed w = X.mkWMap . zip (X.interps w)
 
 
 -- | Prune disamb model: discard model features with absolute values

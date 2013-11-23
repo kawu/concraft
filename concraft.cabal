@@ -36,7 +36,7 @@ library
       , sgd                     >= 0.3.3    && < 0.4
       , tagset-positional       >= 0.3      && < 0.4
       , crf-chain1-constrained  >= 0.3      && < 0.4
-      , crf-chain2-tiers        >= 0.2      && < 0.3
+      , crf-chain2-tiers        >= 0.2.1    && < 0.3
       , monad-codec             >= 0.2      && < 0.3
       , data-lens               >= 2.10     && < 2.11
       , transformers            >= 0.2      && < 0.4
