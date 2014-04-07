@@ -107,8 +107,8 @@ tag Concraft{..} sent =
 
 -- | Determine marginal probabilities corresponding to individual
 -- tags w.r.t. the disambiguation model.  Since the guessing model
--- is used first, the resulting weighted maps may contain tags
--- not present in the input sentence.
+-- is used first, the resulting weighted maps corresponding to OOV
+-- words may contain tags not present in the input sentence.
 marginals :: Word w => Concraft -> Sent w P.Tag -> [WMap P.Tag]
 marginals Concraft{..} sent =
     let gss = G.guess guessNum guesser sent
@@ -120,16 +120,30 @@ marginals Concraft{..} sent =
 ---------------------
 
 
--- | Train guessing and disambiguation models after dataset reanalysis.
+-- | Train the `Concraft` model after dataset reanalysis.
+--
+-- The `FromJSON` and `ToJSON` instances are used to store processed
+-- input data in temporary files on a disk.
 reAnaTrain
     :: (Word w, FromJSON w, ToJSON w)
-    => P.Tagset             -- ^ Tagset
-    -> Analyse w P.Tag      -- ^ Analysis function
-    -> Int                  -- ^ Numer of guessed tags for each word 
-    -> G.TrainConf          -- ^ Guessing model training configuration
-    -> D.TrainConf          -- ^ Disamb model training configuration
-    -> IO [SentO w P.Tag]   -- ^ Training data
-    -> IO [SentO w P.Tag]   -- ^ Evaluation data
+    => P.Tagset             -- ^ A morphosyntactic tagset to which `P.Tag`s
+                            --   of the training and evaluation input data
+                            --   must correspond.
+    -> Analyse w P.Tag      -- ^ Analysis function.  It will be used to
+                            --   reanalyse inpu dataset.
+    -> Int                  -- ^ How many tags is the guessing model supposed
+                            --   to produce for a given OOV word?  It will be 
+                            --   used (see `G.guessSent`) on both training and
+                            --   evaluation input data prior to the training
+                            --   of the disambiguation model.
+    -> G.TrainConf          -- ^ Training configuration for the guessing model.
+    -> D.TrainConf          -- ^ Training configuration for the
+                            --   disambiguation model.
+    -> IO [SentO w P.Tag]   -- ^ Training dataset.  This IO action will be
+                            --   executed a couple of times, so consider using
+                            --   lazy IO if your dataset is big. 
+    -> IO [SentO w P.Tag]   -- ^ Evaluation dataset IO action.  Consider using
+                            --   lazy IO if your dataset is big.
     -> IO Concraft
 reAnaTrain tagset ana guessNum guessConf disambConf train0'IO eval0'IO = do
     Temp.withTempDirectory "." ".reana" $ \tmpDir -> do
@@ -144,16 +158,29 @@ reAnaTrain tagset ana guessNum guessConf disambConf train0'IO eval0'IO = do
     train tagset guessNum guessConf disambConf trainR'IO evalR'IO
 
 
--- | Train guessing and disambiguation models.
--- No reanalysis will be performed.
+-- | Train the `Concraft` model.
+-- No reanalysis of the input data will be performed.
+--
+-- The `FromJSON` and `ToJSON` instances are used to store processed
+-- input data in temporary files on a disk.
 train
     :: (Word w, FromJSON w, ToJSON w)
-    => P.Tagset             -- ^ Tagset
-    -> Int                  -- ^ Numer of guessed tags for each word
-    -> G.TrainConf          -- ^ Guessing model training configuration
-    -> D.TrainConf          -- ^ Disamb model training configuration
-    -> IO [Sent w P.Tag]    -- ^ Training data
-    -> IO [Sent w P.Tag]    -- ^ Evaluation data
+    => P.Tagset             -- ^ A morphosyntactic tagset to which `P.Tag`s
+                            --   of the training and evaluation input data
+                            --   must correspond.
+    -> Int                  -- ^ How many tags is the guessing model supposed
+                            --   to produce for a given OOV word?  It will be 
+                            --   used (see `G.guessSent`) on both training and
+                            --   evaluation input data prior to the training
+                            --   of the disambiguation model.
+    -> G.TrainConf          -- ^ Training configuration for the guessing model.
+    -> D.TrainConf          -- ^ Training configuration for the
+                            --   disambiguation model.
+    -> IO [Sent w P.Tag]    -- ^ Training dataset.  This IO action will be
+                            --   executed a couple of times, so consider using
+                            --   lazy IO if your dataset is big. 
+    -> IO [Sent w P.Tag]    -- ^ Evaluation dataset IO action.  Consider using
+                            --   lazy IO if your dataset is big.
     -> IO Concraft
 train tagset guessNum guessConf disambConf trainR'IO evalR'IO = do
     Temp.withTempDirectory "." ".guessed" $ \tmpDir -> do

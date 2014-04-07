@@ -72,7 +72,8 @@ guess k gsr sent =
     in  CRF.tagK k (crf gsr) (schematize schema sent)
 
 
--- | Insert guessing results into the sentence.
+-- | Insert guessing results into the sentence.  Only interpretations
+-- of OOV words will be extended.
 include :: (X.Word w, Ord t) => [[t]] -> X.Sent w t -> X.Sent w t
 include xss sent =
     [ word { X.tags = tags }
@@ -90,7 +91,8 @@ include xss sent =
 
 -- | Combine `guess` with `include`. 
 guessSent :: (X.Word w, Ord t)
-          => Int -> Guesser t -> X.Sent w t -> X.Sent w t
+          => Int -> Guesser t
+          -> X.Sent w t -> X.Sent w t
 guessSent guessNum guesser sent =
     include (guess guessNum guesser sent) sent
 
