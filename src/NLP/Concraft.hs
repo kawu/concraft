@@ -130,7 +130,7 @@ reAnaTrain
                             --   of the training and evaluation input data
                             --   must correspond.
     -> Analyse w P.Tag      -- ^ Analysis function.  It will be used to
-                            --   reanalyse inpu dataset.
+                            --   reanalyse input dataset.
     -> Int                  -- ^ How many tags is the guessing model supposed
                             --   to produce for a given OOV word?  It will be 
                             --   used (see `G.guessSent`) on both training and
