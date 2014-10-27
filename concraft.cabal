@@ -1,5 +1,5 @@
 name:               concraft
-version:            0.9.2
+version:            0.9.3
 synopsis:           Morphological disambiguation based on constrained CRFs
 description:
     A morphological disambiguation library based on
