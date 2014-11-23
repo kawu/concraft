@@ -39,10 +39,10 @@ library
       , crf-chain2-tiers        >= 0.2.1    && < 0.3
       , monad-codec             >= 0.2      && < 0.3
       , data-lens               >= 2.10     && < 2.11
-      , transformers            >= 0.2      && < 0.4
-      , comonad                 >= 4.0      && < 4.1
+      , transformers            >= 0.2      && < 0.5
+      , comonad                 >= 4.0      && < 4.3
       , temporary               >= 1.1      && < 1.2
-      , aeson                   >= 0.6      && < 0.8
+      , aeson                   >= 0.6      && < 0.9
       , zlib                    >= 0.5      && < 0.6
       , lazy-io                 >= 0.1      && < 0.2
       , cmdargs                 >= 0.10     && < 0.11
