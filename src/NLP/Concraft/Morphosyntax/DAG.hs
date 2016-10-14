@@ -7,7 +7,7 @@
 -- | Types and functions related to the morphosyntax data layer.
 
 
-module NLP.Concraft.Morphosyntax
+module NLP.Concraft.Morphosyntax.DAG
 (
 -- * Segment
   Seg (..)
@@ -18,11 +18,11 @@ module NLP.Concraft.Morphosyntax
 -- * Word class
 , Word (..)
 
--- * Sentence
-, Sent
-, mapSent
-, SentO (..)
-, mapSentO
+-- -- * Sentence
+-- , Sent
+-- , mapSent
+-- , SentO (..)
+-- , mapSentO
 
 -- * Weighted collection
 , WMap (unWMap)
@@ -39,6 +39,9 @@ import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
+
+import qualified Data.CRF.Chain1.Constrained.DAG.Dataset.Internal as DAG
+import           Data.CRF.Chain1.Constrained.DAG.Dataset.Internal (DAG)
 
 
 --------------------------
@@ -92,7 +95,7 @@ interps = S.toList . interpsSet
 
 class Word a where
     -- | Orthographic form.
-    orth    :: a -> T.Text 
+    orth    :: a -> T.Text
     -- | Out-of-vocabulary (OOV) word.
     oov     :: a -> Bool
 
@@ -110,17 +113,21 @@ instance Word w => Word (Seg w t) where
 
 
 -- | A sentence.
-type Sent w t = [Seg w t]
+-- type Sent w t = [Seg w t]
+type Sent w t = DAG () (Seg w t)
+
 
 -- | Map function over sentence tags.
 mapSent :: Ord b => (a -> b) -> Sent w a -> Sent w b
-mapSent = map . mapSeg
+mapSent = fmap . mapSeg
+
 
 -- | A sentence with original, textual representation.
 data SentO w t = SentO
     { segs  :: Sent w t
     , orig  :: L.Text }
-    deriving (Show)
+    -- deriving (Show)
+
 
 -- | Map function over sentence tags.
 mapSentO :: Ord b => (a -> b) -> SentO w a -> SentO w b
@@ -128,9 +135,11 @@ mapSentO f x =
     let segs' = mapSent f (segs x)
     in  x { segs = segs' }
 
+
 ----------------------
 -- Weighted collection
 ----------------------
+
 
 -- | A set with a non-negative weight assigned to each of
 -- its elements.
@@ -143,6 +152,6 @@ mkWMap :: Ord a => [(a, Double)] -> WMap a
 mkWMap = WMap . M.fromListWith (+) . filter ((>=0).snd)
 
 
--- | Map function over weighted collection elements. 
+-- | Map function over weighted collection elements.
 mapWMap :: Ord b => (a -> b) -> WMap a -> WMap b
 mapWMap f = mkWMap . map (first f) . M.toList . unWMap

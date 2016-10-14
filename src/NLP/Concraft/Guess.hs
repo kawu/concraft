@@ -6,7 +6,7 @@ module NLP.Concraft.Guess
 (
 -- * Types
   Guesser (..)
- 
+
 -- * Guessing
 , guess
 , include
@@ -29,6 +29,7 @@ import qualified Data.Map as M
 import qualified Data.Vector as V
 
 import qualified Control.Monad.Ox as Ox
+-- import qualified Data.CRF.Chain1.Constrained as CRF
 import qualified Data.CRF.Chain1.Constrained.DAG as CRF
 import qualified Numeric.SGD as SGD
 
