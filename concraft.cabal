@@ -54,6 +54,7 @@ library
       , NLP.Concraft.Guess
       , NLP.Concraft.Disamb
       , NLP.Concraft.Morphosyntax
+      , NLP.Concraft.Morphosyntax.WMap
       , NLP.Concraft.Morphosyntax.DAG
       , NLP.Concraft.Morphosyntax.Accuracy
 

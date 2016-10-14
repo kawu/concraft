@@ -25,9 +25,7 @@ module NLP.Concraft.Morphosyntax
 , mapSentO
 
 -- * Weighted collection
-, WMap (unWMap)
-, mapWMap
-, mkWMap
+, module NLP.Concraft.Morphosyntax.WMap
 ) where
 
 
@@ -40,6 +38,8 @@ import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
 
+import           NLP.Concraft.Morphosyntax.WMap
+
 
 --------------------------
 -- Segment
@@ -51,9 +51,8 @@ data Seg w t = Seg {
     -- | A word represented by the segment.  Typically it will be
     -- an instance of the `Word` class.
       word  :: w
-    -- | A set of interpretations.  To each interpretation
-    -- a weight of appropriateness within the context
-    -- is assigned.
+    -- | A set of interpretations. To each interpretation a weight of
+    -- appropriateness within the context is assigned.
     , tags  :: WMap t }
     deriving (Show)
 
@@ -66,7 +65,7 @@ instance ToJSON w => ToJSON (Seg w T.Text) where
 instance FromJSON w => FromJSON (Seg w T.Text) where
     parseJSON (Object v) = Seg
         <$> v .: "word"
-        <*> (WMap <$> v .: "tags")
+        <*> (mkWMap <$> v .: "tags")
     parseJSON _ = error "parseJSON (segment): absurd"
 
 
@@ -127,22 +126,3 @@ mapSentO :: Ord b => (a -> b) -> SentO w a -> SentO w b
 mapSentO f x =
     let segs' = mapSent f (segs x)
     in  x { segs = segs' }
-
-----------------------
--- Weighted collection
-----------------------
-
--- | A set with a non-negative weight assigned to each of
--- its elements.
-newtype WMap a = WMap { unWMap :: M.Map a Double }
-    deriving (Show, Eq, Ord, Binary)
-
-
--- | Make a weighted collection.  Negative elements will be ignored.
-mkWMap :: Ord a => [(a, Double)] -> WMap a
-mkWMap = WMap . M.fromListWith (+) . filter ((>=0).snd)
-
-
--- | Map function over weighted collection elements. 
-mapWMap :: Ord b => (a -> b) -> WMap a -> WMap b
-mapWMap f = mkWMap . map (first f) . M.toList . unWMap
