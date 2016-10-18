@@ -56,8 +56,10 @@ library
       , NLP.Concraft.Disamb
       , NLP.Concraft.Morphosyntax
       , NLP.Concraft.Morphosyntax.WMap
-      , NLP.Concraft.Morphosyntax.DAG
       , NLP.Concraft.Morphosyntax.Accuracy
+
+      , NLP.Concraft.DAG.Morphosyntax
+      , NLP.Concraft.DAG.Schema
 
     other-modules:
         NLP.Concraft.Disamb.Positional

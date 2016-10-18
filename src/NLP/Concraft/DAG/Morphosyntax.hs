@@ -7,7 +7,7 @@
 -- | Types and functions related to the morphosyntax data layer.
 
 
-module NLP.Concraft.Morphosyntax.DAG
+module NLP.Concraft.DAG.Morphosyntax
 (
 -- * Segment
   Seg (..)
