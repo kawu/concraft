@@ -3,7 +3,7 @@
 
 module NLP.Concraft
 (
--- * Model 
+-- * Model
   Concraft (..)
 , saveModel
 , loadModel
@@ -233,5 +233,23 @@ withTemp tagset dir tmpl xs handler =
     hClose tmpHandle
     let txtSent = mapSent $ P.showTag tagset
         tagSent = mapSent $ P.parseTag tagset
-    writePar tmpPath $ map txtSent xs
-    handler (map tagSent <$> readPar tmpPath)
+    -- writePar tmpPath $ map txtSent xs
+    -- handler (map tagSent <$> readPar tmpPath)
+    handler (return xs)
+
+-- withTemp
+--     :: (FromJSON w, ToJSON w)
+--     => P.Tagset
+--     -> FilePath                     -- ^ Directory to create the file in
+--     -> String                       -- ^ Template for `Temp.withTempFile`
+--     -> [Sent w P.Tag]               -- ^ Input dataset
+--     -> (IO [Sent w P.Tag] -> IO a)  -- ^ Handler
+--     -> IO a
+-- withTemp _      _   _    [] handler = handler (return [])
+-- withTemp tagset dir tmpl xs handler =
+--   Temp.withTempFile dir tmpl $ \tmpPath tmpHandle -> do
+--     hClose tmpHandle
+--     let txtSent = mapSent $ P.showTag tagset
+--         tagSent = mapSent $ P.parseTag tagset
+--     writePar tmpPath $ map txtSent xs
+--     handler (map tagSent <$> readPar tmpPath)

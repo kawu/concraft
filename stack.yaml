@@ -6,6 +6,7 @@ resolver: lts-1.15
 # Local packages, usually specified by relative directory name
 packages:
 - '.'
+- '../pedestrian-dag'
 - '../crf-chain1-constrained'
 
 # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
@@ -20,6 +21,7 @@ extra-deps:
 - crf-chain2-tiers-0.2.4
 - monad-ox-0.3.0
 - tagset-positional-0.3.0
+- pedestrian-dag-0.1.0
 
 # Override default flag values for local packages and extra-deps
 flags: {}

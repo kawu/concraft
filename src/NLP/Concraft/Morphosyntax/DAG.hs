@@ -38,8 +38,10 @@ import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
 
-import qualified Data.CRF.Chain1.Constrained.DAG.Dataset.Internal as DAG
-import           Data.CRF.Chain1.Constrained.DAG.Dataset.Internal (DAG)
+import qualified Data.DAG as DAG
+import           Data.DAG (DAG)
+-- import qualified Data.CRF.Chain1.Constrained.DAG.Dataset.Internal as DAG
+-- import           Data.CRF.Chain1.Constrained.DAG.Dataset.Internal (DAG)
 
 import           NLP.Concraft.Morphosyntax.WMap
 
