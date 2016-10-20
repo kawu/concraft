@@ -12,7 +12,8 @@ module NLP.Concraft.DAG
 , loadModel
 
 -- * Tagging
-, guessMarginals
+, marginalsSent
+, marginals
 -- , tag
 -- , marginals
 
@@ -34,6 +35,8 @@ import           Data.Aeson
 import qualified System.IO.Temp as Temp
 import qualified Data.ByteString.Lazy as BL
 import qualified Codec.Compression.GZip as GZip
+
+import           Data.DAG (DAG)
 
 import qualified Data.Tagset.Positional as P
 
@@ -118,8 +121,14 @@ loadModel path = do
 
 -- | Determine marginal probabilities corresponding to individual
 -- tags w.r.t. the guessing model.
-guessMarginals :: Word w => Concraft -> Sent w P.Tag -> Sent w P.Tag
-guessMarginals Concraft{..} sent = G.marginalsSent guesser sent
+marginalsSent :: Word w => Concraft -> Sent w P.Tag -> Sent w P.Tag
+marginalsSent Concraft{..} = G.marginalsSent guesser
+
+
+-- | Determine marginal probabilities corresponding to individual
+-- tags w.r.t. the guessing model.
+marginals :: Word w => Concraft -> Sent w P.Tag -> DAG () (WMap P.Tag)
+marginals Concraft{..} = G.marginals guesser
 
 
 ---------------------
