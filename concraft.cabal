@@ -60,6 +60,8 @@ library
 
       , NLP.Concraft.DAG.Morphosyntax
       , NLP.Concraft.DAG.Schema
+      , NLP.Concraft.DAG.Guess
+      , NLP.Concraft.DAG
 
     other-modules:
         NLP.Concraft.Disamb.Positional
