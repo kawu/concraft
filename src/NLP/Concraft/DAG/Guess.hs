@@ -77,17 +77,6 @@ schematize schema sent =
 
 
 --------------------------
--- Trimming
---------------------------
-
-
--- | Trim down the set of potential labels to `k` most probable ones for each
--- OOV word in the sentence.
-trimOOV :: (X.Word w, Ord t) => X.Sent w t -> X.Sent w t
-trimOOV = undefined
-
-
---------------------------
 -- Marginals
 --------------------------
 

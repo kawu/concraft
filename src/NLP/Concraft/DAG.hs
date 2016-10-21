@@ -147,14 +147,14 @@ train
                             --   of the training and evaluation input data
                             --   must correspond.
     -> Int                  -- ^ How many tags is the guessing model supposed
-                            --   to produce for a given OOV word?  It will be 
+                            --   to produce for a given OOV word?  It will be
                             --   used (see `G.guessSent`) on both training and
                             --   evaluation input data prior to the training
                             --   of the disambiguation model.
     -> G.TrainConf          -- ^ Training configuration for the guessing model.
     -> IO [Sent w P.Tag]    -- ^ Training dataset.  This IO action will be
                             --   executed a couple of times, so consider using
-                            --   lazy IO if your dataset is big. 
+                            --   lazy IO if your dataset is big.
     -> IO [Sent w P.Tag]    -- ^ Evaluation dataset IO action.  Consider using
                             --   lazy IO if your dataset is big.
     -> IO Concraft
