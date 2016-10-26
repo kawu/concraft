@@ -8,6 +8,7 @@ packages:
 - '.'
 - '../pedestrian-dag'
 - '../crf-chain1-constrained'
+- '../crf-chain2-tiers'
 
 # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
 extra-deps:
@@ -18,7 +19,7 @@ extra-deps:
 - lazy-io-0.1.0
 - temporary-1.1.2.5
 - crf-chain1-constrained-0.4.0
-- crf-chain2-tiers-0.2.4
+- crf-chain2-tiers-0.3.0
 - monad-ox-0.3.0
 - tagset-positional-0.3.0
 - pedestrian-dag-0.1.0

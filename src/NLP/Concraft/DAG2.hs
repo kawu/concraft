@@ -1,10 +1,10 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
--- | Top-level module adated to DAGs, guessing only.
+-- | Top-level module adated to DAGs, guessing and disambiguation.
 
 
-module NLP.Concraft.DAG
+module NLP.Concraft.DAG2
 (
 -- * Model
   Concraft (..)
@@ -40,10 +40,11 @@ import           Data.DAG (DAG)
 
 import qualified Data.Tagset.Positional as P
 
--- import           NLP.Concraft.Analysis
+import           NLP.Concraft.Analysis
 import           NLP.Concraft.Format.Temp
 import           NLP.Concraft.DAG.Morphosyntax
 import qualified NLP.Concraft.DAG.Guess as G
+import qualified NLP.Concraft.DAG.Disamb as D
 
 
 ---------------------
@@ -52,14 +53,15 @@ import qualified NLP.Concraft.DAG.Guess as G
 
 
 modelVersion :: String
-modelVersion = "dag:0.7"
+modelVersion = "dag2:0.7"
 
 
 -- | Concraft data.
 data Concraft = Concraft
-    { tagset        :: P.Tagset
-    , guessNum      :: Int
-    , guesser       :: G.Guesser P.Tag }
+  { tagset        :: P.Tagset
+  , guessNum      :: Int
+  , guesser       :: G.Guesser P.Tag
+  , disamb        :: D.Disamb }
 
 
 instance Binary Concraft where
@@ -68,12 +70,13 @@ instance Binary Concraft where
         put tagset
         put guessNum
         put guesser
+        put disamb
     get = do
-        comp <- get
+        comp <- get     
         when (comp /= modelVersion) $ error $
             "Incompatible model version: " ++ comp ++
             ", expected: " ++ modelVersion
-        Concraft <$> get <*> get <*> get
+        Concraft <$> get <*> get <*> get <*> get
 
 
 -- | Save model in a file.  Data is compressed using the gzip format.
@@ -91,32 +94,6 @@ loadModel path = do
 ---------------------
 -- Tagging
 ---------------------
-
-
--- -- | Tag sentence using the model.  In your code you should probably
--- -- use your analysis function, translate results into a container of
--- -- `Sent`ences, evaluate `tag` on each sentence and embed the
--- -- tagging results into the morphosyntactic structure of your own.
--- --
--- -- The function returns guessing results as `fst` elements
--- -- of the output pairs and disambiguation results as `snd`
--- -- elements of the corresponding pairs.
--- tag :: Word w => Concraft -> Sent w P.Tag -> [(S.Set P.Tag, P.Tag)]
--- tag Concraft{..} sent =
---     zip (map S.fromList gss) tgs
---   where
---     gss = G.guess guessNum guesser sent
---     tgs = D.disamb disamb (G.include gss sent)
--- 
--- 
--- -- | Determine marginal probabilities corresponding to individual
--- -- tags w.r.t. the disambiguation model.  Since the guessing model
--- -- is used first, the resulting weighted maps corresponding to OOV
--- -- words may contain tags not present in the input sentence.
--- marginals :: Word w => Concraft -> Sent w P.Tag -> [WMap P.Tag]
--- marginals Concraft{..} sent =
---     let gss = G.guess guessNum guesser sent
---     in  D.marginals disamb (G.include gss sent)
 
 
 -- | Determine marginal probabilities corresponding to individual

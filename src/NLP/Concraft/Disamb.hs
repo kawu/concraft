@@ -105,7 +105,7 @@ include f sent =
         | y <- X.interps word ]
 
 
--- | Combine `disamb` with `include`. 
+-- | Combine `disamb` with `include`.
 disambSent :: X.Word w => Disamb -> X.Sent w T.Tag -> X.Sent w T.Tag
 disambSent = include . disamb
 

@@ -64,7 +64,7 @@ instance (Ord t, Binary t) => Binary (Guesser t) where
 
 
 -- | Schematize the input sentence with according to 'schema' rules.
-schematize :: (X.Word w, Ord t) => Schema w t a -> X.Sent w t -> CRF.Sent Ob t
+schematize :: (X.Word w) => Schema w t a -> X.Sent w t -> CRF.Sent Ob t
 schematize schema sent =
   DAG.mapE f sent
   where
@@ -103,7 +103,7 @@ marginalsCRF gsr sent =
 
 -- | Replace the probabilities of the sentence labels with the new probabilities
 -- stemming from the CRF sentence.
-inject :: (X.Word w, Ord t) => DAG () (X.WMap t) -> X.Sent w t -> X.Sent w t
+inject :: DAG () (X.WMap t) -> X.Sent w t -> X.Sent w t
 inject newSent srcSent =
   let doit (new, src) = src {X.tags = new}
   in  fmap doit (DAG.zipE newSent srcSent)
