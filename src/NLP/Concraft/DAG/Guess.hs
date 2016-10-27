@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TupleSections #-}
 
 
 module NLP.Concraft.DAG.Guess
@@ -90,8 +91,15 @@ marginalsSent gsr sent = inject (marginals gsr sent) sent
 -- | Determine the marginal probabilities of to individual labels in the sentence.
 marginals :: (X.Word w, Ord t) => Guesser t -> X.Sent w t -> DAG () (X.WMap t)
 marginals gsr =
-  let getTags = X.mkWMap . M.toList . CRF.unProb . CRF.choice
-  in  fmap getTags . marginalsCRF gsr
+  fmap getTags . marginalsCRF gsr
+  where
+    getTags = X.mkWMap . M.toList . choice
+    -- below we mix the chosen and the potential interpretations together
+    choice w = M.unionWith (+)
+      (CRF.unProb . CRF.choice $ w)
+      (M.fromList . map (,0) . interps $ w)
+    interps = S.toList . CRF.lbs . CRF.word
+--     choice = CRF.unProb . CRF.choice
 
 
 -- | Ascertain the marginal probabilities of to individual labels in the sentence.

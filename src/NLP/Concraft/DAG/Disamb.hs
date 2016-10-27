@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TupleSections #-}
 
 
 module NLP.Concraft.DAG.Disamb
@@ -116,7 +117,12 @@ _marginals dmb
   = fmap getTags
   . marginalsCRF dmb
   where
-    getTags = X.mkWMap . M.toList . CRF.unProb . snd
+    getTags = X.mkWMap . M.toList . choice -- CRF.unProb . snd
+    -- below we mix the chosen and the potential interpretations together
+    choice w = M.unionWith (+)
+      (CRF.unProb . snd $ w)
+      (M.fromList . map (,0) . interps $ w)
+    interps = S.toList . CRF.lbs . fst
 
 
 -- | Ascertain the marginal probabilities of the individual labels in the sentence.

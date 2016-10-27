@@ -20,6 +20,7 @@ module NLP.Concraft.DAG2
 -- * Tagging
 , guessSent
 , tagSent
+, tag
 
 -- * Training
 , train
@@ -162,9 +163,14 @@ _guessSent k gsr = trimOOV k . G.marginalsSent gsr
 
 
 -- | Perform guessing, trimming, and finally determine marginal probabilities
--- corresponding to individual tags w.r.t. the disamb model.
+-- corresponding to individual tags w.r.t. the disambiguation model.
 tagSent :: X.Word w => Int -> Concraft -> Sent w P.Tag -> Sent w P.Tag
 tagSent k crf = disambMarginalsSent crf . guessSent k crf
+
+
+-- | Similar to `tagSent`, but keeps only the resulting probabilities.
+tag :: X.Word w => Int -> Concraft -> Sent w P.Tag -> DAG () (WMap P.Tag)
+tag k crf = disambMarginals crf . guessSent k crf
 
 
 ---------------------
@@ -207,6 +213,8 @@ train tagset guessNum guessConf disambConf trainR'IO evalR'IO = do
   evalG   <- map guess <$> evalR'IO
   temp "train" trainG $ \trainG'IO -> do
   temp "eval"  evalG  $ \evalG'IO  -> do
+--   let trainG'IO = trainR'IO
+--       evalG'IO = evalR'IO
 
   putStrLn "\n===== Train disambiguation model ====="
   disamb <- D.train disambConf trainG'IO evalG'IO
