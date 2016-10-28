@@ -151,7 +151,7 @@ train
                             --   used (see `G.guessSent`) on both training and
                             --   evaluation input data prior to the training
                             --   of the disambiguation model.
-    -> G.TrainConf          -- ^ Training configuration for the guessing model.
+    -> G.TrainConf P.Tag    -- ^ Training configuration for the guessing model.
     -> IO [Sent w P.Tag]    -- ^ Training dataset.  This IO action will be
                             --   executed a couple of times, so consider using
                             --   lazy IO if your dataset is big.

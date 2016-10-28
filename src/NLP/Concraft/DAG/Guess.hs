@@ -51,12 +51,16 @@ import qualified NLP.Concraft.DAG.Morphosyntax as X
 -- | A guessing model.
 data Guesser t = Guesser
     { schemaConf    :: SchemaConf
-    , crf           :: CRF.CRF Ob t }
+    , crf           :: CRF.CRF Ob t
+    , zeroProbLab   :: t
+    -- ^ Zero probability label is used when the model does not propose any
+    -- interpretation with non-zero probability for an unknown word.
+    }
 
 
 instance (Ord t, Binary t) => Binary (Guesser t) where
-    put Guesser{..} = put schemaConf >> put crf
-    get = Guesser <$> get <*> get
+    put Guesser{..} = put schemaConf >> put crf >> put zeroProbLab
+    get = Guesser <$> get <*> get <*> get
 
 
 --------------------------
@@ -91,15 +95,18 @@ marginalsSent gsr sent = inject (marginals gsr sent) sent
 -- | Determine the marginal probabilities of to individual labels in the sentence.
 marginals :: (X.Word w, Ord t) => Guesser t -> X.Sent w t -> DAG () (X.WMap t)
 marginals gsr =
-  fmap getTags . marginalsCRF gsr
+  fmap tags . marginalsCRF gsr
   where
-    getTags = X.mkWMap . M.toList . choice
-    -- below we mix the chosen and the potential interpretations together
+    tags = X.mkWMap . M.toList . considerZero . choice
+    -- we mix the chosen and the potential interpretations together
     choice w = M.unionWith (+)
       (CRF.unProb . CRF.choice $ w)
       (M.fromList . map (,0) . interps $ w)
     interps = S.toList . CRF.lbs . CRF.word
---     choice = CRF.unProb . CRF.choice
+    -- if empty, we choose the zero probability label.
+    considerZero m
+      | M.null m = M.singleton (zeroProbLab gsr) 0
+      | otherwise = m
 
 
 -- | Ascertain the marginal probabilities of to individual labels in the sentence.
@@ -171,20 +178,22 @@ data R0T
 
 
 -- | Training configuration.
-data TrainConf = TrainConf
+data TrainConf t = TrainConf
     { schemaConfT   :: SchemaConf
     -- | SGD parameters.
     , sgdArgsT      :: SGD.SgdArgs
     -- | Store SGD dataset on disk
     , onDiskT       :: Bool
     -- | R0 construction method
-    , r0T           :: R0T }
+    , r0T           :: R0T
+    -- | Zero probability label
+    , zeroProbLabel :: t }
 
 
 -- | Train guesser.
 train
     :: (X.Word w, Ord t)
-    => TrainConf            -- ^ Training configuration
+    => TrainConf t          -- ^ Training configuration
     -> IO [X.Sent w t]      -- ^ Training data
     -> IO [X.Sent w t]      -- ^ Evaluation data
     -> IO (Guesser t)
@@ -198,7 +207,7 @@ train TrainConf{..} trainData evalData = do
         mkR0 (const CRF.presentFeats)
         (schemed schema <$> trainData)
         (schemed schema <$> evalData)
-    return $ Guesser schemaConfT crf
+    return $ Guesser schemaConfT crf zeroProbLabel
 
 
 -- | Schematized dataset.
