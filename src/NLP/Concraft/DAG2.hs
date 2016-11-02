@@ -16,11 +16,16 @@ module NLP.Concraft.DAG2
 , guessMarginals
 , disambMarginalsSent
 , disambMarginals
+, D.ProbType (..)
+, disambProbsSent
+, disambProbs
 
 -- * Tagging
 , guessSent
 , tagSent
 , tag
+, tagSent'
+, tag'
 
 -- * Training
 , train
@@ -97,9 +102,9 @@ loadModel path = do
     x `seq` return x
 
 
----------------------
--- Marginals
----------------------
+----------------------
+-- Marginals and Probs
+----------------------
 
 
 -- | Determine marginal probabilities corresponding to individual
@@ -124,6 +129,18 @@ disambMarginalsSent Concraft{..} = D.marginalsSent disamb
 -- tags w.r.t. the guessing model.
 disambMarginals :: X.Word w => Concraft -> Sent w P.Tag -> DAG () (WMap P.Tag)
 disambMarginals Concraft{..} = D.marginals disamb
+
+
+-- | Determine probabilities corresponding to individual
+-- tags w.r.t. the guessing model.
+disambProbsSent :: X.Word w => D.ProbType -> Concraft -> Sent w P.Tag -> Sent w P.Tag
+disambProbsSent typ Concraft{..} = D.probsSent typ disamb
+
+
+-- | Determine probabilities corresponding to individual
+-- tags w.r.t. the guessing model.
+disambProbs :: X.Word w => D.ProbType -> Concraft -> Sent w P.Tag -> DAG () (WMap P.Tag)
+disambProbs typ Concraft{..} = D.probs typ disamb
 
 
 -------------------------------------------------
@@ -171,6 +188,17 @@ tagSent k crf = disambMarginalsSent crf . guessSent k crf
 -- | Similar to `tagSent`, but keeps only the resulting probabilities.
 tag :: X.Word w => Int -> Concraft -> Sent w P.Tag -> DAG () (WMap P.Tag)
 tag k crf = disambMarginals crf . guessSent k crf
+
+
+-- | Perform guessing, trimming, and finally determine probabilities
+-- corresponding to individual tags w.r.t. the disambiguation model.
+tagSent' :: X.Word w => Int -> D.ProbType -> Concraft -> Sent w P.Tag -> Sent w P.Tag
+tagSent' k typ crf = disambProbsSent typ crf . guessSent k crf
+
+
+-- | Similar to `tagSent'`, but keeps only the resulting probabilities.
+tag' :: X.Word w => Int -> D.ProbType -> Concraft -> Sent w P.Tag -> DAG () (WMap P.Tag)
+tag' k typ crf = disambProbs typ crf . guessSent k crf
 
 
 ---------------------

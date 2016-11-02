@@ -16,6 +16,11 @@ module NLP.Concraft.DAG.Disamb
 , marginalsSent
 , marginals
 
+-- * Probs in general
+, CRF.ProbType (..)
+, probsSent
+, probs
+
 -- * Training
 , TrainConf (..)
 , train
@@ -148,6 +153,55 @@ inject :: DAG () (X.WMap t) -> X.Sent w t -> X.Sent w t
 inject newSent srcSent =
   let doit (new, src) = src {X.tags = new}
   in  fmap doit (DAG.zipE newSent srcSent)
+
+
+--------------------------
+-- Probs in general
+--------------------------
+
+
+-- | Replace the probabilities of the sentence with the marginal probabilities
+-- stemming from the model.
+probsSent :: (X.Word w) => CRF.ProbType -> Disamb -> X.Sent w T.Tag -> X.Sent w T.Tag
+probsSent probTyp dmb sent = inject (probs probTyp dmb sent) sent
+
+
+-- | Determine the marginal probabilities of to individual labels in the sentence.
+probs :: (X.Word w) => CRF.ProbType -> Disamb -> X.Sent w T.Tag -> DAG () (X.WMap T.Tag)
+probs probTyp dmb sent
+  = fmap unSplitWMap
+  . DAG.zipE sent
+  . _probs probTyp dmb
+  $ sent
+  where
+    unSplitWMap (seg, wmap) = X.mapWMap (unSplitAtoms seg) wmap
+    unSplitAtoms seg = unSplit (P.split (tiers dmb)) seg
+
+
+-- | Determine the marginal probabilities of to individual labels in the sentence.
+_probs :: (X.Word w) => CRF.ProbType -> Disamb -> X.Sent w T.Tag -> DAG () (X.WMap [P.Atom])
+_probs probTyp dmb
+  = fmap getTags
+  . probsCRF probTyp dmb
+  where
+    getTags = X.mkWMap . M.toList . choice -- CRF.unProb . snd
+    -- below we mix the chosen and the potential interpretations together
+    choice w = M.unionWith (+)
+      (CRF.unProb . snd $ w)
+      (M.fromList . map (,0) . interps $ w)
+    interps = S.toList . CRF.lbs . fst
+
+
+-- | Ascertain the marginal probabilities of the individual labels in the sentence.
+probsCRF :: (X.Word w) => CRF.ProbType -> Disamb -> X.Sent w T.Tag -> CRF.SentL Ob P.Atom
+probsCRF probTyp Disamb{..} sent
+  = CRF.probs probTyp crf
+  . schematize schema
+  . X.mapSent split
+  $ sent
+  where
+    schema  = fromConf schemaConf
+    split   = P.split tiers
 
 
 --------------------------
