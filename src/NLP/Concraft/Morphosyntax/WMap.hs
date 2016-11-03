@@ -3,6 +3,7 @@
 
 module NLP.Concraft.Morphosyntax.WMap
 ( WMap (unWMap)
+, fromMap
 , mapWMap
 , mkWMap
 , trim
@@ -25,6 +26,11 @@ import qualified Data.Map as M
 -- its elements.
 newtype WMap a = WMap { unWMap :: M.Map a Double }
     deriving (Show, Eq, Ord, Binary)
+
+
+-- | Create WMap from a map.
+fromMap :: M.Map a Double -> WMap a
+fromMap = WMap
 
 
 -- | Make a weighted collection.  Negative elements will be ignored.

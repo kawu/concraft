@@ -11,20 +11,21 @@ module NLP.Concraft.DAG2
 , saveModel
 , loadModel
 
+
+-- * Annotation
+, Anno
+, replace
+
 -- * Marginals
-, guessMarginalsSent
-, guessMarginals
-, disambMarginalsSent
-, disambMarginals
 , D.ProbType (..)
-, disambProbsSent
+, guessMarginals
+, disambMarginals
 , disambProbs
 
 -- * Tagging
-, guessSent
-, tagSent
+-- , guessSent
+, guess
 , tag
-, tagSent'
 , tag'
 
 -- * Training
@@ -37,8 +38,10 @@ module NLP.Concraft.DAG2
 
 import           System.IO (hClose)
 import           Control.Applicative ((<$>), (<*>))
+import           Control.Arrow (first)
 import           Control.Monad (when)
 import qualified Data.Set as S
+import qualified Data.Map.Strict as M
 import           Data.Binary (Binary, put, get)
 import qualified Data.Binary as Binary
 import           Data.Aeson
@@ -46,7 +49,8 @@ import qualified System.IO.Temp as Temp
 import qualified Data.ByteString.Lazy as BL
 import qualified Codec.Compression.GZip as GZip
 
-import           Data.DAG (DAG)
+import           Data.DAG (DAG, EdgeID)
+import qualified Data.DAG as DAG
 
 import qualified Data.Tagset.Positional as P
 
@@ -103,44 +107,53 @@ loadModel path = do
 
 
 ----------------------
+-- Annotation
+----------------------
+
+
+-- | DAG annotation, assignes @b@ values to @a@ labels for each edge in the
+-- graph.
+type Anno a b = DAG () (M.Map a b)
+
+
+-- | Replace sentence probability values with the given annotation.
+replace :: (Ord t) => Anno t Double -> Sent w t -> Sent w t
+replace anno sent =
+  fmap join $ DAG.zipE anno sent
+  where
+    join (m, seg) = seg {X.tags = X.fromMap m}
+--     apply f
+--       = X.fromMap
+--       . M.mapWithKey (\key _val -> f M.! key)
+--       . X.unWMap
+
+
+-- | Extract marginal annotations from the given sentence.
+extract :: Sent w t -> Anno t Double
+extract = fmap $ X.unWMap . X.tags
+
+
+----------------------
 -- Marginals and Probs
 ----------------------
 
 
 -- | Determine marginal probabilities corresponding to individual
 -- tags w.r.t. the guessing model.
-guessMarginalsSent :: X.Word w => Concraft -> Sent w P.Tag -> Sent w P.Tag
-guessMarginalsSent Concraft{..} = G.marginalsSent guesser
+guessMarginals :: X.Word w => G.Guesser P.Tag -> Sent w P.Tag -> Anno P.Tag Double
+guessMarginals gsr = fmap X.unWMap . G.marginals gsr
 
 
 -- | Determine marginal probabilities corresponding to individual
 -- tags w.r.t. the guessing model.
-guessMarginals :: X.Word w => Concraft -> Sent w P.Tag -> DAG () (WMap P.Tag)
-guessMarginals Concraft{..} = G.marginals guesser
-
-
--- | Determine marginal probabilities corresponding to individual
--- tags w.r.t. the guessing model.
-disambMarginalsSent :: X.Word w => Concraft -> Sent w P.Tag -> Sent w P.Tag
-disambMarginalsSent Concraft{..} = D.marginalsSent disamb
-
-
--- | Determine marginal probabilities corresponding to individual
--- tags w.r.t. the guessing model.
-disambMarginals :: X.Word w => Concraft -> Sent w P.Tag -> DAG () (WMap P.Tag)
-disambMarginals Concraft{..} = D.marginals disamb
+disambMarginals :: X.Word w => D.Disamb -> Sent w P.Tag -> Anno P.Tag Double
+disambMarginals dmb = fmap X.unWMap . D.marginals dmb
 
 
 -- | Determine probabilities corresponding to individual
 -- tags w.r.t. the guessing model.
-disambProbsSent :: X.Word w => D.ProbType -> Concraft -> Sent w P.Tag -> Sent w P.Tag
-disambProbsSent typ Concraft{..} = D.probsSent typ disamb
-
-
--- | Determine probabilities corresponding to individual
--- tags w.r.t. the guessing model.
-disambProbs :: X.Word w => D.ProbType -> Concraft -> Sent w P.Tag -> DAG () (WMap P.Tag)
-disambProbs typ Concraft{..} = D.probs typ disamb
+disambProbs :: X.Word w => D.ProbType -> D.Disamb -> Sent w P.Tag -> Anno P.Tag Double
+disambProbs typ dmb = fmap X.unWMap . D.probs typ dmb
 
 
 -------------------------------------------------
@@ -167,38 +180,28 @@ trimOOV k =
 
 -- | Determine marginal probabilities corresponding to individual tags w.r.t.
 -- the guessing model and, afterwards, trim the sentence to keep only the `k`
--- most probably labels for each edge.
-guessSent :: X.Word w => Int -> Concraft -> Sent w P.Tag -> Sent w P.Tag
-guessSent k = _guessSent k . guesser
+-- most probably labels for each edge. Note that, for unknown words, the entire
+-- set of default tags is considered.
+guessSent :: X.Word w => Int -> G.Guesser P.Tag -> Sent w P.Tag -> Sent w P.Tag
+guessSent k gsr sent = trimOOV k $ replace (guessMarginals gsr sent) sent
 
 
--- | Determine marginal probabilities corresponding to individual tags w.r.t.
--- the guessing model and, afterwards, trim the sentence to keep only the `k`
--- most probably labels for each edge.
-_guessSent :: X.Word w => Int -> G.Guesser P.Tag -> Sent w P.Tag -> Sent w P.Tag
-_guessSent k gsr = trimOOV k . G.marginalsSent gsr
+-- | Perform guessing, trimming, and finally determine marginal probabilities
+-- corresponding to individual tags w.r.t. the guessing model.
+guess :: X.Word w => Int -> G.Guesser P.Tag -> Sent w P.Tag -> Anno P.Tag Double
+guess k gsr = extract . guessSent k gsr
 
 
 -- | Perform guessing, trimming, and finally determine marginal probabilities
 -- corresponding to individual tags w.r.t. the disambiguation model.
-tagSent :: X.Word w => Int -> Concraft -> Sent w P.Tag -> Sent w P.Tag
-tagSent k crf = disambMarginalsSent crf . guessSent k crf
-
-
--- | Similar to `tagSent`, but keeps only the resulting probabilities.
-tag :: X.Word w => Int -> Concraft -> Sent w P.Tag -> DAG () (WMap P.Tag)
-tag k crf = disambMarginals crf . guessSent k crf
+tag :: X.Word w => Int -> Concraft -> Sent w P.Tag -> Anno P.Tag Double
+tag k crf = disambMarginals (disamb crf) . guessSent k (guesser crf)
 
 
 -- | Perform guessing, trimming, and finally determine probabilities
 -- corresponding to individual tags w.r.t. the disambiguation model.
-tagSent' :: X.Word w => Int -> D.ProbType -> Concraft -> Sent w P.Tag -> Sent w P.Tag
-tagSent' k typ crf = disambProbsSent typ crf . guessSent k crf
-
-
--- | Similar to `tagSent'`, but keeps only the resulting probabilities.
-tag' :: X.Word w => Int -> D.ProbType -> Concraft -> Sent w P.Tag -> DAG () (WMap P.Tag)
-tag' k typ crf = disambProbs typ crf . guessSent k crf
+tag' :: X.Word w => Int -> D.ProbType -> Concraft -> Sent w P.Tag -> Anno P.Tag Double
+tag' k typ Concraft{..} = disambProbs typ disamb . guessSent k guesser
 
 
 ---------------------
@@ -236,7 +239,7 @@ train tagset guessNum guessConf disambConf trainR'IO evalR'IO = do
 
   putStrLn "\n===== Train guessing model ====="
   guesser <- G.train guessConf trainR'IO evalR'IO
-  let guess = _guessSent guessNum guesser
+  let guess = guessSent guessNum guesser
   trainG  <- map guess <$> trainR'IO
   evalG   <- map guess <$> evalR'IO
   temp "train" trainG $ \trainG'IO -> do
