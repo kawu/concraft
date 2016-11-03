@@ -16,6 +16,10 @@ module NLP.Concraft.DAG2
 , Anno
 , replace
 
+-- * Best paths
+, findOptimalPaths
+, disambPath
+
 -- * Marginals
 , D.ProbType (..)
 , guessMarginals
@@ -37,9 +41,11 @@ module NLP.Concraft.DAG2
 
 
 import           System.IO (hClose)
-import           Control.Applicative ((<$>), (<*>))
+import           Control.Applicative ((<$>), (<*>)) -- , (<|>))
 import           Control.Arrow (first)
-import           Control.Monad (when)
+import           Control.Monad (when, guard)
+-- import           Data.Maybe (listToMaybe)
+import qualified Data.Foldable as F
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import           Data.Binary (Binary, put, get)
@@ -131,6 +137,47 @@ replace anno sent =
 -- | Extract marginal annotations from the given sentence.
 extract :: Sent w t -> Anno t Double
 extract = fmap $ X.unWMap . X.tags
+
+
+----------------------
+-- Best path
+----------------------
+
+
+-- | Find all optimal paths in the given annotation. Optimal paths are those
+-- which go through tags with the assigned probability 1.
+findOptimalPaths :: Anno t Double -> [[(EdgeID, t)]]
+findOptimalPaths dag = do
+  edgeID <- DAG.dagEdges dag
+  guard $ DAG.isInitialEdge edgeID dag
+  doit edgeID
+  where
+    doit i = inside i ++ final i
+    inside i = do
+      (tag, weight) <- M.toList (DAG.edgeLabel i dag)
+      guard $ weight >= 1.0 - eps
+      j <- DAG.nextEdges i dag
+      xs <- doit j
+      return $ (i, tag) : xs
+    final i = do
+      guard $ DAG.isFinalEdge i dag
+      (tag, weight) <- M.toList (DAG.edgeLabel i dag)
+      guard $ weight >= 1.0 - eps
+      return [(i, tag)]
+    eps = 1.0e-9
+
+
+-- | Make the given path with disamb markers in the given annotation
+-- and produce a new disamb annotation.
+disambPath :: (Ord t) => [(EdgeID, t)] -> Anno t Double -> Anno t Bool
+disambPath path =
+  DAG.mapE doit
+  where
+    pathMap = M.fromList path
+    doit edgeID m = M.fromList $ do
+      let onPath = M.lookup edgeID pathMap
+      x <- M.keys m
+      return (x, Just x == onPath)
 
 
 ----------------------
