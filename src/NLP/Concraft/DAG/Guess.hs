@@ -204,7 +204,8 @@ train TrainConf{..} trainData evalData = do
             AnyChosen   -> CRF.anyChosen
             OovChosen   -> CRF.oovChosen
     crf <- CRF.train sgdArgsT onDiskT
-        mkR0 (const CRF.presentFeats)
+        -- mkR0 (const CRF.presentFeats)
+        mkR0 (\r0 -> CRF.hiddenFeats r0 . map (fmap fst))
         (schemed schema <$> trainData)
         (schemed schema <$> evalData)
     return $ Guesser schemaConfT crf zeroProbLabel
