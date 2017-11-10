@@ -10,7 +10,7 @@ module NLP.Concraft.DAG.Guess
 
 -- * Marginals
 , marginals
--- , marginalsSent
+, marginalsSent
 
 -- -- * Guessing
 -- , guess
@@ -71,6 +71,19 @@ instance (Ord t, Binary t, Ord s, Binary s) => Binary (Guesser t s) where
 
 
 --------------------------
+-- Simplify
+--------------------------
+
+
+-- | Simplify the given label.
+simplify :: (Ord t) => Guesser t s -> t -> s
+simplify Guesser{..} x =
+  case M.lookup x simpliMap of
+    Nothing -> zeroProbLab
+    Just y -> y
+
+
+--------------------------
 -- Schematize
 --------------------------
 
@@ -108,48 +121,89 @@ schematize schema sent =
 --------------------------
 
 
--- -- | Replace the probabilities of the sentence with the marginal probabilities
--- -- stemming from the model.
--- marginalsSent
---   :: (X.Word w, Ord s)
---   => Guesser t s
---   -> X.Sent w t
---   -> X.Sent w t
--- marginalsSent gsr sent = inject (marginals gsr sent) sent
-
-
 -- | Determine the marginal probabilities of the individual labels in the sentence.
 marginals :: (X.Word w, Ord t, Ord s) => Guesser t s -> X.Sent w t -> DAG () (X.WMap t)
-marginals gsr = undefined
---   fmap tags . marginalsCRF gsr
---   where
---     tags = X.mkWMap . M.toList . considerZero . choice
---     -- we mix the chosen and the potential interpretations together
---     choice w = M.unionWith (+)
---       (CRF.unProb . CRF.choice $ w)
---       (M.fromList . map (,0) . interps $ w)
---     interps = S.toList . CRF.lbs . CRF.word
---     -- if empty, we choose the zero probability label.
---     considerZero m
---       | M.null m = M.singleton (zeroProbLab gsr) 0
---       | otherwise = m
+marginals gsr = fmap X.tags . marginalsSent gsr
 
 
--- -- | Ascertain the marginal probabilities of to individual labels in the sentence.
--- marginalsCRF :: (X.Word w, Ord t) => Guesser t -> X.Sent w t -> CRF.SentL Ob t
--- marginalsCRF gsr sent =
---   let schema = fromConf (schemaConf gsr)
---   in  CRF.marginals (crf gsr) (schematize schema sent)
---
---
+-- | Replace the probabilities of the sentence with the marginal probabilities
+-- stemming from the model.
+marginalsSent :: (X.Word w, Ord t, Ord s) => Guesser t s -> X.Sent w t -> X.Sent w t
+marginalsSent gsr sent
+  = (\new -> inject gsr new sent)
+  . fmap tags
+  . marginalsCRF gsr
+  $ sent
+  where
+    tags = X.mkWMap . M.toList . considerZero . choice
+    -- we mix the chosen and the potential interpretations together
+    choice w = M.unionWith (+)
+      (CRF.unProb . CRF.choice $ w)
+      (M.fromList . map (,0) . interps $ w)
+    interps = S.toList . CRF.lbs . CRF.word
+    -- if empty, we choose the zero probability label.
+    considerZero m
+      | M.null m = M.singleton (zeroProbLab gsr) 0
+      | otherwise = m
+
+
+-- | Ascertain the marginal probabilities of to individual labels in the sentence.
+marginalsCRF :: (X.Word w, Ord t, Ord s) => Guesser t s -> X.Sent w t -> CRF.SentL Ob s
+marginalsCRF gsr dag0 =
+  let schema = fromConf (schemaConf gsr)
+      dag = X.mapSent (simplify gsr) dag0
+  in  CRF.marginals (crf gsr) (schematize schema dag)
+
+
 -- -- | Replace the probabilities of the sentence labels with the new probabilities
 -- -- stemming from the CRF sentence.
 -- inject :: DAG () (X.WMap t) -> X.Sent w t -> X.Sent w t
 -- inject newSent srcSent =
 --   let doit (new, src) = src {X.tags = new}
 --   in  fmap doit (DAG.zipE newSent srcSent)
---
---
+
+
+-- | Replace the probabilities of the sentence labels with the new probabilities
+-- stemming from the CRF sentence.
+inject
+  :: (Ord t, Ord s)
+  => Guesser t s
+  -> DAG () (X.WMap s)
+  -> X.Sent w t
+  -> X.Sent w t
+inject gsr newSent srcSent =
+  let doit (newSpl, src) =
+        let new = injectWMap gsr newSpl (X.tags src)
+        in  src {X.tags = new}
+  in  fmap doit (DAG.zipE newSent srcSent)
+
+
+-- -- | Replace label probabilities with the new probabilities.
+-- inject
+--   :: (Ord t, Ord s)
+--   => Guesser t s
+--   -> DAG () (X.WMap s)
+--   -> DAG () (X.WMap t)
+--   -> DAG () (X.WMap t)
+-- inject gsr newDat srcDag =
+--   let doit (newSpl, src) = injectWMap gsr newSpl src
+--   in  fmap doit (DAG.zipE newDat srcDag)
+
+
+-- | Replace label probabilities with the new probabilities.
+injectWMap
+  :: (Ord t, Ord s)
+  => Guesser t s
+  -> X.WMap s
+  -> X.WMap t
+  -> X.WMap t
+injectWMap gsr newSpl src = X.mkWMap
+  [ ( tag
+    , maybe 0 id $
+      M.lookup (simplify gsr tag) (X.unWMap newSpl) )
+  | (tag, _) <- M.toList (X.unWMap src) ]
+
+
 -- --------------------------
 -- -- ???
 -- --------------------------
@@ -251,11 +305,11 @@ schemed
   -> Schema w s a
   -> [X.Sent w t]
   -> [CRF.SentL Ob s]
-schemed simplify schema =
+schemed simpl schema =
     map onSent
   where
     onSent dag0 =
-        let dag = X.mapSent simplify dag0
+        let dag = X.mapSent simpl dag0
             mkProb = CRF.mkProb . M.toList . X.unWMap . X.tags
         in  fmap (uncurry CRF.mkWordL) $
             DAG.zipE (schematize schema dag) (fmap mkProb dag)
