@@ -21,22 +21,22 @@ module NLP.Concraft.DAG2
 , disambPath
 
 -- * Marginals
-, D.ProbType (..)
+-- , D.ProbType (..)
 , guessMarginals
-, disambMarginals
-, disambProbs
+-- , disambMarginals
+-- , disambProbs
 
 -- * Tagging
 -- , guessSent
 , guess
 , tag
-, tag'
+-- , tag'
 
 -- * Training
 , train
 
 -- * Pruning
-, prune
+-- , prune
 ) where
 
 
@@ -65,7 +65,7 @@ import           NLP.Concraft.Format.Temp
 import qualified NLP.Concraft.DAG.Morphosyntax as X
 import           NLP.Concraft.DAG.Morphosyntax (Sent, WMap)
 import qualified NLP.Concraft.DAG.Guess as G
-import qualified NLP.Concraft.DAG.Disamb as D
+-- import qualified NLP.Concraft.DAG.Disamb as D
 
 
 ---------------------
@@ -81,8 +81,8 @@ modelVersion = "dag2:0.7"
 data Concraft = Concraft
   { tagset        :: P.Tagset
   , guessNum      :: Int
-  , guesser       :: G.Guesser P.Tag
-  , disamb        :: D.Disamb }
+  , guesser       :: G.Guesser P.Tag }
+  -- , disamb        :: D.Disamb }
 
 
 instance Binary Concraft where
@@ -91,13 +91,13 @@ instance Binary Concraft where
         put tagset
         put guessNum
         put guesser
-        put disamb
+        -- put disamb
     get = do
         comp <- get
         when (comp /= modelVersion) $ error $
             "Incompatible model version: " ++ comp ++
             ", expected: " ++ modelVersion
-        Concraft <$> get <*> get <*> get <*> get
+        Concraft <$> get <*> get <*> get  -- <*> get
 
 
 -- | Save model in a file.  Data is compressed using the gzip format.
@@ -191,16 +191,16 @@ guessMarginals :: X.Word w => G.Guesser P.Tag -> Sent w P.Tag -> Anno P.Tag Doub
 guessMarginals gsr = fmap X.unWMap . G.marginals gsr
 
 
--- | Determine marginal probabilities corresponding to individual
--- tags w.r.t. the guessing model.
-disambMarginals :: X.Word w => D.Disamb -> Sent w P.Tag -> Anno P.Tag Double
-disambMarginals dmb = fmap X.unWMap . D.marginals dmb
-
-
--- | Determine probabilities corresponding to individual
--- tags w.r.t. the guessing model.
-disambProbs :: X.Word w => D.ProbType -> D.Disamb -> Sent w P.Tag -> Anno P.Tag Double
-disambProbs typ dmb = fmap X.unWMap . D.probs typ dmb
+-- -- | Determine marginal probabilities corresponding to individual
+-- -- tags w.r.t. the guessing model.
+-- disambMarginals :: X.Word w => D.Disamb -> Sent w P.Tag -> Anno P.Tag Double
+-- disambMarginals dmb = fmap X.unWMap . D.marginals dmb
+--
+--
+-- -- | Determine probabilities corresponding to individual
+-- -- tags w.r.t. the guessing model.
+-- disambProbs :: X.Word w => D.ProbType -> D.Disamb -> Sent w P.Tag -> Anno P.Tag Double
+-- disambProbs typ dmb = fmap X.unWMap . D.probs typ dmb
 
 
 -------------------------------------------------
@@ -210,7 +210,7 @@ disambProbs typ dmb = fmap X.unWMap . D.probs typ dmb
 
 -- | Trim down the set of potential labels to `k` most probable ones
 -- for each OOV word in the sentence.
-trimOOV :: X.Word w => Int -> Sent w P.Tag -> Sent w P.Tag
+trimOOV :: (X.Word w) => Int -> Sent w t -> Sent w t
 trimOOV k =
   fmap trim
   where
@@ -242,13 +242,14 @@ guess k gsr = extract . guessSent k gsr
 -- | Perform guessing, trimming, and finally determine marginal probabilities
 -- corresponding to individual tags w.r.t. the disambiguation model.
 tag :: X.Word w => Int -> Concraft -> Sent w P.Tag -> Anno P.Tag Double
-tag k crf = disambMarginals (disamb crf) . guessSent k (guesser crf)
+-- tag k crf = disambMarginals (disamb crf) . guessSent k (guesser crf)
+tag k crf = undefined
 
 
--- | Perform guessing, trimming, and finally determine probabilities
--- corresponding to individual tags w.r.t. the disambiguation model.
-tag' :: X.Word w => Int -> D.ProbType -> Concraft -> Sent w P.Tag -> Anno P.Tag Double
-tag' k typ Concraft{..} = disambProbs typ disamb . guessSent k guesser
+-- -- | Perform guessing, trimming, and finally determine probabilities
+-- -- corresponding to individual tags w.r.t. the disambiguation model.
+-- tag' :: X.Word w => Int -> D.ProbType -> Concraft -> Sent w P.Tag -> Anno P.Tag Double
+-- tag' k typ Concraft{..} = disambProbs typ disamb . guessSent k guesser
 
 
 ---------------------
@@ -272,15 +273,16 @@ train
                             --   evaluation input data prior to the training
                             --   of the disambiguation model.
     -> G.TrainConf P.Tag    -- ^ Training configuration for the guessing model.
-    -> D.TrainConf          -- ^ Training configuration for the
-                            --   disambiguation model.
+--     -> D.TrainConf          -- ^ Training configuration for the
+--                             --   disambiguation model.
     -> IO [Sent w P.Tag]    -- ^ Training dataset.  This IO action will be
                             --   executed a couple of times, so consider using
                             --   lazy IO if your dataset is big.
     -> IO [Sent w P.Tag]    -- ^ Evaluation dataset IO action.  Consider using
                             --   lazy IO if your dataset is big.
     -> IO Concraft
-train tagset guessNum guessConf disambConf trainR'IO evalR'IO = do
+-- train tagset guessNum guessConf disambConf trainR'IO evalR'IO = do
+train tagset guessNum guessConf trainR'IO evalR'IO = do
   Temp.withTempDirectory "." ".guessed" $ \tmpDir -> do
   let temp = withTemp tagset tmpDir
 
@@ -295,8 +297,9 @@ train tagset guessNum guessConf disambConf trainR'IO evalR'IO = do
 --       evalG'IO = evalR'IO
 
   putStrLn "\n===== Train disambiguation model ====="
-  disamb <- D.train disambConf trainG'IO evalG'IO
-  return $ Concraft tagset guessNum guesser disamb
+  putStrLn "\n<<<<JUST KIDDING>>>>"
+  -- disamb <- D.train disambConf trainG'IO evalG'IO
+  return $ Concraft tagset guessNum guesser -- disamb
 
 
 ---------------------
@@ -329,10 +332,9 @@ withTemp tagset dir tmpl xs handler =
 ---------------------
 
 
--- | Prune disambiguation model: discard model features with
--- absolute values (in log-domain) lower than the given threshold.
-prune :: Double -> Concraft -> Concraft
-prune x concraft =
-    let disamb' = D.prune x (disamb concraft)
-    in  concraft { disamb = disamb' }
-
+-- -- | Prune disambiguation model: discard model features with
+-- -- absolute values (in log-domain) lower than the given threshold.
+-- prune :: Double -> Concraft -> Concraft
+-- prune x concraft =
+--     let disamb' = D.prune x (disamb concraft)
+--     in  concraft { disamb = disamb' }

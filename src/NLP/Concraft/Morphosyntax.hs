@@ -91,7 +91,7 @@ interps = S.toList . interpsSet
 
 class Word a where
     -- | Orthographic form.
-    orth    :: a -> T.Text 
+    orth    :: a -> T.Text
     -- | Out-of-vocabulary (OOV) word.
     oov     :: a -> Bool
 

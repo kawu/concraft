@@ -59,7 +59,7 @@ schematize schema sent =
     v = V.fromList sent
     n = V.length v
     obs = S.fromList . Ox.execOx . schema v
-    lbs i 
+    lbs i
         | X.oov w  = S.empty
         | otherwise = X.interpsSet w
         where w = v V.! i
@@ -92,7 +92,7 @@ include xss sent =
         ++ zip xs [0, 0 ..]
 
 
--- | Combine `guess` with `include`. 
+-- | Combine `guess` with `include`.
 guessSent :: (X.Word w, Ord t)
           => Int -> Guesser t
           -> X.Sent w t -> X.Sent w t
@@ -102,7 +102,7 @@ guessSent guessNum guesser sent =
 
 -- | Method of constructing the default set of labels (R0).
 data R0T
-    = AnyInterps        -- ^ See `CRF.anyInterps` 
+    = AnyInterps        -- ^ See `CRF.anyInterps`
     | AnyChosen         -- ^ See `CRF.anyChosen`
     | OovChosen         -- ^ See `CRF.oovChosen`
     deriving (Show, Eq, Ord, Enum, Typeable, Data)

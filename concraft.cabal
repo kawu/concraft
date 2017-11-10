@@ -62,7 +62,7 @@ library
       , NLP.Concraft.DAG.Schema
       , NLP.Concraft.DAG.Guess
       , NLP.Concraft.DAG.Disamb
-      , NLP.Concraft.DAG
+      -- , NLP.Concraft.DAG
       , NLP.Concraft.DAG2
 
     other-modules:
