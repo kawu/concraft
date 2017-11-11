@@ -23,20 +23,20 @@ module NLP.Concraft.DAG2
 -- * Marginals
 -- , D.ProbType (..)
 , guessMarginals
--- , disambMarginals
--- , disambProbs
+, disambMarginals
+, disambProbs
 
 -- * Tagging
 , guess
 , guessSent
--- , tag
+, tag
 -- , tag'
 
 -- * Training
 , train
 
 -- * Pruning
--- , prune
+, prune
 ) where
 
 
@@ -65,7 +65,7 @@ import           NLP.Concraft.Format.Temp
 import qualified NLP.Concraft.DAG.Morphosyntax as X
 import           NLP.Concraft.DAG.Morphosyntax (Sent, WMap)
 import qualified NLP.Concraft.DAG.Guess as G
--- import qualified NLP.Concraft.DAG.Disamb as D
+import qualified NLP.Concraft.DAG.Disamb as D
 
 
 ---------------------
@@ -81,8 +81,8 @@ modelVersion = "dag2:0.11"
 data Concraft t = Concraft
   { tagset        :: P.Tagset
   , guessNum      :: Int
-  , guesser       :: G.Guesser t P.Tag }
-  -- , disamb        :: D.Disamb }
+  , guesser       :: G.Guesser t P.Tag
+  , disamb        :: D.Disamb t }
 
 
 instance (Ord t, Binary t) => Binary (Concraft t) where
@@ -91,13 +91,13 @@ instance (Ord t, Binary t) => Binary (Concraft t) where
         put tagset
         put guessNum
         put guesser
-        -- put disamb
+        put disamb
     get = do
         comp <- get
         when (comp /= modelVersion) $ error $
             "Incompatible model version: " ++ comp ++
             ", expected: " ++ modelVersion
-        Concraft <$> get <*> get <*> get  -- <*> get
+        Concraft <$> get <*> get <*> get  <*> get
 
 
 -- | Save model in a file.  Data is compressed using the gzip format.
@@ -191,16 +191,17 @@ guessMarginals :: (X.Word w, Ord t) => G.Guesser t P.Tag -> Sent w t -> Anno t D
 guessMarginals gsr = fmap X.unWMap . G.marginals gsr
 
 
--- -- | Determine marginal probabilities corresponding to individual
--- -- tags w.r.t. the guessing model.
--- disambMarginals :: X.Word w => D.Disamb -> Sent w P.Tag -> Anno P.Tag Double
+-- | Determine marginal probabilities corresponding to individual
+-- tags w.r.t. the guessing model.
+disambMarginals :: (X.Word w, Ord t) => D.Disamb t -> Sent w t -> Anno t Double
 -- disambMarginals dmb = fmap X.unWMap . D.marginals dmb
---
---
--- -- | Determine probabilities corresponding to individual
--- -- tags w.r.t. the guessing model.
--- disambProbs :: X.Word w => D.ProbType -> D.Disamb -> Sent w P.Tag -> Anno P.Tag Double
--- disambProbs typ dmb = fmap X.unWMap . D.probs typ dmb
+disambMarginals = disambProbs D.Marginals
+
+
+-- | Determine probabilities corresponding to individual
+-- tags w.r.t. the guessing model.
+disambProbs :: (X.Word w, Ord t) => D.ProbType -> D.Disamb t -> Sent w t -> Anno t Double
+disambProbs typ dmb = fmap X.unWMap . D.probs typ dmb
 
 
 -------------------------------------------------
@@ -239,16 +240,16 @@ guess :: (X.Word w, Ord t) => Int -> G.Guesser t P.Tag -> Sent w t -> Anno t Dou
 guess k gsr = extract . guessSent k gsr
 
 
--- -- | Perform guessing, trimming, and finally determine marginal probabilities
+-- | Perform guessing, trimming, and finally determine marginal probabilities
+-- corresponding to individual tags w.r.t. the disambiguation model.
+tag :: (X.Word w, Ord t) => Int -> Concraft t -> Sent w t -> Anno t Double
+tag k crf = disambMarginals (disamb crf) . guessSent k (guesser crf)
+
+
+-- -- | Perform guessing, trimming, and finally determine probabilities
 -- -- corresponding to individual tags w.r.t. the disambiguation model.
--- tag :: X.Word w => Int -> Concraft -> Sent w P.Tag -> Anno P.Tag Double
--- tag k crf = disambMarginals (disamb crf) . guessSent k (guesser crf)
---
---
--- -- -- | Perform guessing, trimming, and finally determine probabilities
--- -- -- corresponding to individual tags w.r.t. the disambiguation model.
--- -- tag' :: X.Word w => Int -> D.ProbType -> Concraft -> Sent w P.Tag -> Anno P.Tag Double
--- -- tag' k typ Concraft{..} = disambProbs typ disamb . guessSent k guesser
+-- tag' :: X.Word w => Int -> D.ProbType -> Concraft -> Sent w P.Tag -> Anno P.Tag Double
+-- tag' k typ Concraft{..} = disambProbs typ disamb . guessSent k guesser
 
 
 ---------------------
@@ -272,18 +273,17 @@ train
                             --   evaluation input data prior to the training
                             --   of the disambiguation model.
     -> G.TrainConf t P.Tag  -- ^ Training configuration for the guessing model.
---     -> D.TrainConf          -- ^ Training configuration for the
---                             --   disambiguation model.
+    -> D.TrainConf t        -- ^ Training configuration for the
+                            --   disambiguation model.
     -> IO [Sent w t]    -- ^ Training dataset.  This IO action will be
                             --   executed a couple of times, so consider using
                             --   lazy IO if your dataset is big.
     -> IO [Sent w t]    -- ^ Evaluation dataset IO action.  Consider using
                             --   lazy IO if your dataset is big.
     -> IO (Concraft t)
--- train tagset guessNum guessConf disambConf trainR'IO evalR'IO = do
-train tagset guessNum guessConf trainR'IO evalR'IO = do
---   Temp.withTempDirectory "." ".guessed" $ \tmpDir -> do
---   let temp = withTemp tagset tmpDir
+train tagset guessNum guessConf disambConf trainR'IO evalR'IO = do
+  Temp.withTempDirectory "." ".guessed" $ \tmpDir -> do
+  let temp = withTemp tagset tmpDir
 
   putStrLn "\n===== Train guessing model ====="
   guesser <- G.train guessConf trainR'IO evalR'IO
@@ -291,15 +291,12 @@ train tagset guessNum guessConf trainR'IO evalR'IO = do
   trainG  <- map guess <$> trainR'IO
   evalG   <- map guess <$> evalR'IO
 
---   temp "train" trainG $ \trainG'IO -> do
---   temp "eval"  evalG  $ \evalG'IO  -> do
---   let trainG'IO = trainR'IO
---       evalG'IO = evalR'IO
+  temp "train" trainG $ \trainG'IO -> do
+  temp "eval"  evalG  $ \evalG'IO  -> do
 
   putStrLn "\n===== Train disambiguation model ====="
-  putStrLn "\n===== (JUST KIDDING) ====="
-  -- disamb <- D.train disambConf trainG'IO evalG'IO
-  return $ Concraft tagset guessNum guesser -- disamb
+  disamb <- D.train disambConf trainG'IO evalG'IO
+  return $ Concraft tagset guessNum guesser disamb
 
 
 ---------------------
@@ -319,8 +316,8 @@ withTemp
   :: P.Tagset
   -> FilePath                     -- ^ Directory to create the file in
   -> String                       -- ^ Template for `Temp.withTempFile`
-  -> [Sent w P.Tag]               -- ^ Input dataset
-  -> (IO [Sent w P.Tag] -> IO a)  -- ^ Handler
+  -> [Sent w t]                   -- ^ Input dataset
+  -> (IO [Sent w t] -> IO a)      -- ^ Handler
   -> IO a
 withTemp _      _   _    [] handler = handler (return [])
 withTemp tagset dir tmpl xs handler =
@@ -336,9 +333,9 @@ withTemp tagset dir tmpl xs handler =
 ---------------------
 
 
--- -- | Prune disambiguation model: discard model features with
--- -- absolute values (in log-domain) lower than the given threshold.
--- prune :: Double -> Concraft -> Concraft
--- prune x concraft =
---     let disamb' = D.prune x (disamb concraft)
---     in  concraft { disamb = disamb' }
+-- | Prune disambiguation model: discard model features with
+-- absolute values (in log-domain) lower than the given threshold.
+prune :: Double -> Concraft t -> Concraft t
+prune x concraft =
+    let disamb' = D.prune x (disamb concraft)
+    in  concraft { disamb = disamb' }

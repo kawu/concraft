@@ -88,19 +88,6 @@ simplify Guesser{..} x =
 --------------------------
 
 
--- -- | Schematize the input sentence according to the 'schema' rules.
--- schematize :: (X.Word w) => Schema w t a -> X.Sent w t -> CRF.Sent Ob t
--- schematize schema sent =
---   DAG.mapE f sent
---   where
---     f i = const $ CRF.Word (obs i) (lbs i)
---     obs = S.fromList . Ox.execOx . schema sent
---     lbs i
---       | X.oov w  = S.empty
---       | otherwise = X.interpsSet w
---       where w = DAG.edgeLabel i sent
-
-
 -- | Schematize the input sentence according to the 'schema' rules.
 -- TODO: looks like there is no reason at all for `Schema w t a` to
 -- be parametrized with `t`?

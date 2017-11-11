@@ -12,9 +12,9 @@ module NLP.Concraft.DAG.Disamb
 , P.Tier (..)
 , P.Atom (..)
 
--- * Marginals
-, marginalsSent
-, marginals
+-- -- * Marginals
+-- , marginalsSent
+-- , marginals
 
 -- * Probs in general
 , CRF.ProbType (..)
@@ -56,15 +56,47 @@ import qualified NLP.Concraft.DAG.Morphosyntax as X
 
 
 -- | A disambiguation model.
-data Disamb = Disamb
+data Disamb t = Disamb
     { tiers         :: [P.Tier]
     , schemaConf    :: SchemaConf
-    , crf           :: CRF.CRF Ob P.Atom }
+    , crf           :: CRF.CRF Ob P.Atom
+    , simpliMap     :: M.Map t T.Tag
+      -- ^ A map which simplifies the tags of generic type `t` to simplified
+      -- positional tags. The motivation behind this is that tags can have a
+      -- richer structure.
+      --
+      -- TODO: This seems awfully suboptimal. Just imagine that (genric) tags
+      -- have complex structure, there might be even some parts that the model
+      -- completely ignores!  We badly need a more reasonable abstraction...
+      --
+      -- NOTE: What we would really like here is just a function (t -> T.Tag), but
+      -- functions cannot have Binary instances!
+      --
+      -- NOTE: A related idea: this can happen, anyway, in real situation that a tag
+      -- is encountered which is not known by the model.  It would be nice to be able
+      -- to treat it as the closest tag that can be handled.  Then, one have to define
+      -- the notion of the similarilty between tags, though...
+    }
 
 
-instance Binary Disamb where
-    put Disamb{..} = put tiers >> put schemaConf >> put crf
-    get = Disamb <$> get <*> get <*> get
+instance (Binary t) => Binary (Disamb t) where
+    put Disamb{..} = put tiers >> put schemaConf >> put crf >> put simpliMap
+    get = Disamb <$> get <*> get <*> get <*> get
+
+
+--------------------------
+-- Simplify
+--------------------------
+
+
+-- | Simplify the given label.
+simplify :: (Ord t) => Disamb t -> t -> T.Tag
+simplify Disamb{..} x =
+  case M.lookup x simpliMap of
+    Nothing -> defaultTag
+    Just y -> y
+  where
+    defaultTag = snd $ M.findMin simpliMap
 
 
 --------------------------
@@ -83,76 +115,89 @@ schematize schema sent =
       where w = DAG.edgeLabel i sent
 
 
+-- --------------------------
+-- -- Marginals
+-- --------------------------
+--
+--
+-- -- | Determine the marginal probabilities of to individual labels in the sentence.
+-- marginals :: (X.Word w, Ord t) => Disamb t -> X.Sent w t -> DAG () (X.WMap t)
+-- marginals dmb = fmap X.tags . marginalsSent dmb
+--
+--
+-- -- | Determine the marginal probabilities of to individual labels in the sentence.
+-- -- marginalsSent :: (X.Word w, Ord t) => Disamb t -> X.Sent w t -> DAG () (X.WMap [P.Atom])
+-- marginalsSent :: (X.Word w, Ord t) => Disamb t -> X.Sent w t -> X.Sent w t
+-- marginalsSent dmb sent
+--   = (\new -> inject dmb new sent)
+--   . fmap getTags
+--   . marginalsCRF dmb
+--   $ sent
+--   where
+--     getTags = X.mkWMap . M.toList . choice -- CRF.unProb . snd
+--     -- below we mix the chosen and the potential interpretations together
+--     choice w = M.unionWith (+)
+--       (CRF.unProb . snd $ w)
+--       (M.fromList . map (,0) . interps $ w)
+--     interps = S.toList . CRF.lbs . fst
+--
+--
+-- -- | Ascertain the marginal probabilities of the individual labels in the sentence.
+-- marginalsCRF :: (X.Word w, Ord t) => Disamb t -> X.Sent w t -> CRF.SentL Ob P.Atom
+-- marginalsCRF dmb
+--   = CRF.marginals (crf dmb)
+--   . schematize schema
+--   . X.mapSent (split . simplify dmb)
+--   where
+--     schema = fromConf (schemaConf dmb)
+--     split  = P.split (tiers dmb)
+
+
 --------------------------
--- Marginals
+-- Injection
 --------------------------
-
-
--- | Replace the probabilities of the sentence with the marginal probabilities
--- stemming from the model.
-marginalsSent :: (X.Word w) => Disamb -> X.Sent w T.Tag -> X.Sent w T.Tag
-marginalsSent dmb sent = inject (marginals dmb sent) sent
-
-
--- | Determine the marginal probabilities of to individual labels in the sentence.
-marginals :: (X.Word w) => Disamb -> X.Sent w T.Tag -> DAG () (X.WMap T.Tag)
-marginals dmb sent
-  = fmap unSplitWMap
-  . DAG.zipE sent
-  . _marginals dmb
-  $ sent
-  where
-    unSplitWMap (seg, wmap) = X.mapWMap (unSplitAtoms seg) wmap
-    unSplitAtoms seg = unSplit (P.split (tiers dmb)) seg
-
-
--- | Unsplit a complex tag (assuming that it is one of the interpretations of
--- the word).
-unSplit :: Eq t => (r -> t) -> X.Seg w r -> t -> r
-unSplit split word x = case jy of
-    Just y  -> y
-    Nothing -> error "unSplit: no such interpretation"
-  where
-    jy = List.find ((==x) . split) (X.interps word)
-
-
--- | Determine the marginal probabilities of to individual labels in the sentence.
-_marginals :: (X.Word w) => Disamb -> X.Sent w T.Tag -> DAG () (X.WMap [P.Atom])
-_marginals dmb
-  = fmap getTags
-  . marginalsCRF dmb
-  where
-    getTags = X.mkWMap . M.toList . choice -- CRF.unProb . snd
-    -- below we mix the chosen and the potential interpretations together
-    choice w = M.unionWith (+)
-      (CRF.unProb . snd $ w)
-      (M.fromList . map (,0) . interps $ w)
-    interps = S.toList . CRF.lbs . fst
-
-
--- | Ascertain the marginal probabilities of the individual labels in the sentence.
-marginalsCRF :: (X.Word w) => Disamb -> X.Sent w T.Tag -> CRF.SentL Ob P.Atom
-marginalsCRF Disamb{..} sent
---   -- let schema = fromConf (schemaConf gsr)
---   -- in  CRF.marginals (crf gsr) (schematize schema sent)
---   = map (uncurry embed)
---   . zip sent
-  = CRF.marginals crf
-  . schematize schema
-  . X.mapSent split
-  $ sent
-  where
-    schema  = fromConf schemaConf
-    split   = P.split tiers
-    -- embed w = X.mkWMap . zip (X.interps w)
 
 
 -- | Replace the probabilities of the sentence labels with the new probabilities
 -- stemming from the CRF sentence.
-inject :: DAG () (X.WMap t) -> X.Sent w t -> X.Sent w t
-inject newSent srcSent =
-  let doit (new, src) = src {X.tags = new}
+inject
+  :: (Ord t, X.Word w)
+  => Disamb t
+  -> DAG () (X.WMap [P.Atom])
+  -> X.Sent w t
+  -> X.Sent w t
+inject dmb newSent srcSent =
+  let doit (target, src) =
+        let oldTags = if X.oov (X.word src)
+                      then X.mkWMap . map (,0) . M.keys . simpliMap $ dmb
+                      else X.tags src
+            newTags = injectWMap dmb target oldTags
+        in  src {X.tags = newTags}
   in  fmap doit (DAG.zipE newSent srcSent)
+
+
+-- | Replace label probabilities with the new probabilities.
+injectWMap
+  :: (Ord t)
+  => Disamb t
+  -> X.WMap [P.Atom]
+  -> X.WMap t
+  -> X.WMap t
+injectWMap dmb newSpl src = X.mkWMap
+  [ ( tag
+    , maybe 0 id $
+      M.lookup (P.split (tiers dmb) (simplify dmb tag)) (X.unWMap newSpl) )
+  | (tag, _) <- M.toList (X.unWMap src) ]
+
+
+-- -- | Unsplit a complex tag (assuming that it is one of the interpretations of
+-- -- the word).
+-- unSplit :: Eq t => (r -> t) -> X.Seg w r -> t -> r
+-- unSplit split word x = case jy of
+--     Just y  -> y
+--     Nothing -> error "unSplit: no such interpretation"
+--   where
+--     jy = List.find ((==x) . split) (X.interps word)
 
 
 --------------------------
@@ -160,29 +205,19 @@ inject newSent srcSent =
 --------------------------
 
 
--- | Replace the probabilities of the sentence with the marginal probabilities
--- stemming from the model.
-probsSent :: (X.Word w) => CRF.ProbType -> Disamb -> X.Sent w T.Tag -> X.Sent w T.Tag
-probsSent probTyp dmb sent = inject (probs probTyp dmb sent) sent
+-- | Determine the marginal probabilities of to individual labels in the sentence.
+probs :: (X.Word w, Ord t) => CRF.ProbType -> Disamb t -> X.Sent w t -> DAG () (X.WMap t)
+probs probTyp dmb = fmap X.tags . probsSent probTyp dmb
 
 
 -- | Determine the marginal probabilities of to individual labels in the sentence.
-probs :: (X.Word w) => CRF.ProbType -> Disamb -> X.Sent w T.Tag -> DAG () (X.WMap T.Tag)
-probs probTyp dmb sent
-  = fmap unSplitWMap
-  . DAG.zipE sent
-  . _probs probTyp dmb
-  $ sent
-  where
-    unSplitWMap (seg, wmap) = X.mapWMap (unSplitAtoms seg) wmap
-    unSplitAtoms seg = unSplit (P.split (tiers dmb)) seg
-
-
--- | Determine the marginal probabilities of to individual labels in the sentence.
-_probs :: (X.Word w) => CRF.ProbType -> Disamb -> X.Sent w T.Tag -> DAG () (X.WMap [P.Atom])
-_probs probTyp dmb
-  = fmap getTags
+-- marginalsSent :: (X.Word w, Ord t) => Disamb t -> X.Sent w t -> DAG () (X.WMap [P.Atom])
+probsSent :: (X.Word w, Ord t) => CRF.ProbType -> Disamb t -> X.Sent w t -> X.Sent w t
+probsSent probTyp dmb sent
+  = (\new -> inject dmb new sent)
+  . fmap getTags
   . probsCRF probTyp dmb
+  $ sent
   where
     getTags = X.mkWMap . M.toList . choice -- CRF.unProb . snd
     -- below we mix the chosen and the potential interpretations together
@@ -192,16 +227,17 @@ _probs probTyp dmb
     interps = S.toList . CRF.lbs . fst
 
 
+
+
 -- | Ascertain the marginal probabilities of the individual labels in the sentence.
-probsCRF :: (X.Word w) => CRF.ProbType -> Disamb -> X.Sent w T.Tag -> CRF.SentL Ob P.Atom
-probsCRF probTyp Disamb{..} sent
-  = CRF.probs probTyp crf
+probsCRF :: (X.Word w, Ord t) => CRF.ProbType -> Disamb t -> X.Sent w t -> CRF.SentL Ob P.Atom
+probsCRF probTyp dmb
+  = CRF.probs probTyp (crf dmb)
   . schematize schema
-  . X.mapSent split
-  $ sent
+  . X.mapSent (split . simplify dmb)
   where
-    schema  = fromConf schemaConf
-    split   = P.split tiers
+    schema = fromConf (schemaConf dmb)
+    split  = P.split (tiers dmb)
 
 
 --------------------------
@@ -211,7 +247,7 @@ probsCRF probTyp Disamb{..} sent
 
 -- | Prune disamb model: discard model features with absolute values
 -- (in log-domain) lower than the given threshold.
-prune :: Double -> Disamb -> Disamb
+prune :: Double -> Disamb t -> Disamb t
 prune x dmb =
     let crf' = CRF.prune x (crf dmb)
     in  dmb { crf = crf' }
@@ -223,31 +259,34 @@ prune x dmb =
 
 
 -- | Training configuration.
-data TrainConf
-    = TrainConf
-        { tiersT        :: [P.Tier]
-        , schemaConfT   :: SchemaConf
-        , sgdArgsT      :: SGD.SgdArgs
-        , onDiskT       :: Bool }
---     | ReTrainConf
---         { initDmb       :: Disamb
---         , sgdArgsT      :: SGD.SgdArgs
---         , onDiskT       :: Bool }
+data TrainConf t = TrainConf
+  { tiersT      :: [P.Tier]
+  , schemaConfT :: SchemaConf
+  , sgdArgsT    :: SGD.SgdArgs
+  , onDiskT     :: Bool
+  -- | Label simplification function
+  , simplifyLabel :: t -> T.Tag
+  }
 
 
 -- | Train disambiguation module.
 train
-    :: (X.Word w)
-    => TrainConf            -- ^ Training configuration
-    -> IO [X.Sent w T.Tag]  -- ^ Training data
-    -> IO [X.Sent w T.Tag]  -- ^ Evaluation data
-    -> IO Disamb
+    :: (X.Word w, Ord t)
+    => TrainConf t      -- ^ Training configuration
+    -> IO [X.Sent w t]  -- ^ Training data
+    -> IO [X.Sent w t]  -- ^ Evaluation data
+    -> IO (Disamb t)
 train TrainConf{..} trainData evalData = do
-    crf <- CRF.train (length tiersT) CRF.selectHidden sgdArgsT onDiskT
-        (schemed schema split <$> trainData)
-        (schemed schema split <$> evalData)
-    putStr "\nNumber of features: " >> print (CRF.size crf)
-    return $ Disamb tiersT schemaConfT crf
+  tagSet <- S.unions . map tagSetIn <$> trainData
+  putStr "\nTagset size: " >> print (S.size tagSet)
+  let tagMap = M.fromList
+        [ (t, simplifyLabel t)
+        | t <- S.toList tagSet ]
+  crf <- CRF.train (length tiersT) CRF.selectHidden sgdArgsT onDiskT
+    (schemed simplifyLabel schema split <$> trainData)
+    (schemed simplifyLabel schema split <$> evalData)
+  putStr "\nNumber of features: " >> print (CRF.size crf)
+  return $ Disamb tiersT schemaConfT crf tagMap
   where
     schema = fromConf schemaConfT
     split  = P.split tiersT
@@ -256,16 +295,26 @@ train TrainConf{..} trainData evalData = do
 -- | Schematized dataset.
 schemed
   -- :: (X.Word w, Ord t)
-  :: (Ord t)
-  => Schema w [t] a
-  -> (T.Tag -> [t])
-  -> [X.Sent w T.Tag]
-  -> [CRF.SentL Ob t]
-schemed schema split =
+  :: (Ord a)
+  => (t -> T.Tag)
+  -> Schema w [a] b
+  -> (T.Tag -> [a])
+  -> [X.Sent w t]
+  -> [CRF.SentL Ob a]
+schemed simpl schema split =
     map onSent
   where
     onSent sent =
-        let xs = fmap (X.mapSeg split) sent
+        let xs = fmap (X.mapSeg split) (X.mapSent simpl sent)
             mkProb = CRF.mkProb . M.toList . X.unWMap . X.tags
         -- in  fmap (uncurry CRF.mkWordL) $
         in  DAG.zipE (schematize schema xs) (fmap mkProb xs)
+
+
+-- | Retrieve the tagset in the given sentence.
+tagSetIn :: (Ord t) => X.Sent w t -> S.Set t
+tagSetIn dag = S.fromList
+  [ tag
+  | edgeID <- DAG.dagEdges dag
+  , let edge = DAG.edgeLabel edgeID dag
+  , tag <- M.keys . X.unWMap . X.tags $ edge ]
