@@ -27,9 +27,9 @@ module NLP.Concraft.DAG2
 -- , disambProbs
 
 -- * Tagging
--- , guessSent
 , guess
-, tag
+, guessSent
+-- , tag
 -- , tag'
 
 -- * Training
@@ -74,18 +74,18 @@ import qualified NLP.Concraft.DAG.Guess as G
 
 
 modelVersion :: String
-modelVersion = "dag2:0.7"
+modelVersion = "dag2:0.11"
 
 
 -- | Concraft data.
-data Concraft = Concraft
+data Concraft t = Concraft
   { tagset        :: P.Tagset
   , guessNum      :: Int
-  , guesser       :: G.Guesser P.Tag }
+  , guesser       :: G.Guesser t P.Tag }
   -- , disamb        :: D.Disamb }
 
 
-instance Binary Concraft where
+instance (Ord t, Binary t) => Binary (Concraft t) where
     put Concraft{..} = do
         put modelVersion
         put tagset
@@ -101,12 +101,12 @@ instance Binary Concraft where
 
 
 -- | Save model in a file.  Data is compressed using the gzip format.
-saveModel :: FilePath -> Concraft -> IO ()
+saveModel :: (Ord t, Binary t) => FilePath -> Concraft t -> IO ()
 saveModel path = BL.writeFile path . GZip.compress . Binary.encode
 
 
 -- | Load model from a file.
-loadModel :: FilePath -> IO Concraft
+loadModel :: (Ord t, Binary t) => FilePath -> IO (Concraft t)
 loadModel path = do
     x <- Binary.decode . GZip.decompress <$> BL.readFile path
     x `seq` return x
@@ -187,7 +187,7 @@ disambPath path =
 
 -- | Determine marginal probabilities corresponding to individual
 -- tags w.r.t. the guessing model.
-guessMarginals :: X.Word w => G.Guesser P.Tag -> Sent w P.Tag -> Anno P.Tag Double
+guessMarginals :: (X.Word w, Ord t) => G.Guesser t P.Tag -> Sent w t -> Anno t Double
 guessMarginals gsr = fmap X.unWMap . G.marginals gsr
 
 
@@ -210,7 +210,7 @@ guessMarginals gsr = fmap X.unWMap . G.marginals gsr
 
 -- | Trim down the set of potential labels to `k` most probable ones
 -- for each OOV word in the sentence.
-trimOOV :: (X.Word w) => Int -> Sent w t -> Sent w t
+trimOOV :: (X.Word w, Ord t) => Int -> Sent w t -> Sent w t
 trimOOV k =
   fmap trim
   where
@@ -227,29 +227,28 @@ trimOOV k =
 
 -- | Determine marginal probabilities corresponding to individual tags w.r.t.
 -- the guessing model and, afterwards, trim the sentence to keep only the `k`
--- most probably labels for each edge. Note that, for unknown words, the entire
+-- most probably labels for each OOV edge. Note that, for OOV words, the entire
 -- set of default tags is considered.
-guessSent :: X.Word w => Int -> G.Guesser P.Tag -> Sent w P.Tag -> Sent w P.Tag
+guessSent :: (X.Word w, Ord t) => Int -> G.Guesser t P.Tag -> Sent w t -> Sent w t
 guessSent k gsr sent = trimOOV k $ replace (guessMarginals gsr sent) sent
 
 
 -- | Perform guessing, trimming, and finally determine marginal probabilities
 -- corresponding to individual tags w.r.t. the guessing model.
-guess :: X.Word w => Int -> G.Guesser P.Tag -> Sent w P.Tag -> Anno P.Tag Double
+guess :: (X.Word w, Ord t) => Int -> G.Guesser t P.Tag -> Sent w t -> Anno t Double
 guess k gsr = extract . guessSent k gsr
 
 
--- | Perform guessing, trimming, and finally determine marginal probabilities
--- corresponding to individual tags w.r.t. the disambiguation model.
-tag :: X.Word w => Int -> Concraft -> Sent w P.Tag -> Anno P.Tag Double
--- tag k crf = disambMarginals (disamb crf) . guessSent k (guesser crf)
-tag k crf = undefined
-
-
--- -- | Perform guessing, trimming, and finally determine probabilities
+-- -- | Perform guessing, trimming, and finally determine marginal probabilities
 -- -- corresponding to individual tags w.r.t. the disambiguation model.
--- tag' :: X.Word w => Int -> D.ProbType -> Concraft -> Sent w P.Tag -> Anno P.Tag Double
--- tag' k typ Concraft{..} = disambProbs typ disamb . guessSent k guesser
+-- tag :: X.Word w => Int -> Concraft -> Sent w P.Tag -> Anno P.Tag Double
+-- tag k crf = disambMarginals (disamb crf) . guessSent k (guesser crf)
+--
+--
+-- -- -- | Perform guessing, trimming, and finally determine probabilities
+-- -- -- corresponding to individual tags w.r.t. the disambiguation model.
+-- -- tag' :: X.Word w => Int -> D.ProbType -> Concraft -> Sent w P.Tag -> Anno P.Tag Double
+-- -- tag' k typ Concraft{..} = disambProbs typ disamb . guessSent k guesser
 
 
 ---------------------
@@ -263,7 +262,7 @@ tag k crf = undefined
 -- The `FromJSON` and `ToJSON` instances are used to store processed
 -- input data in temporary files on a disk.
 train
-    :: (X.Word w)
+    :: (X.Word w, Ord t)
     => P.Tagset             -- ^ A morphosyntactic tagset to which `P.Tag`s
                             --   of the training and evaluation input data
                             --   must correspond.
@@ -272,32 +271,33 @@ train
                             --   used (see `G.guessSent`) on both training and
                             --   evaluation input data prior to the training
                             --   of the disambiguation model.
-    -> G.TrainConf P.Tag    -- ^ Training configuration for the guessing model.
+    -> G.TrainConf t P.Tag  -- ^ Training configuration for the guessing model.
 --     -> D.TrainConf          -- ^ Training configuration for the
 --                             --   disambiguation model.
-    -> IO [Sent w P.Tag]    -- ^ Training dataset.  This IO action will be
+    -> IO [Sent w t]    -- ^ Training dataset.  This IO action will be
                             --   executed a couple of times, so consider using
                             --   lazy IO if your dataset is big.
-    -> IO [Sent w P.Tag]    -- ^ Evaluation dataset IO action.  Consider using
+    -> IO [Sent w t]    -- ^ Evaluation dataset IO action.  Consider using
                             --   lazy IO if your dataset is big.
-    -> IO Concraft
+    -> IO (Concraft t)
 -- train tagset guessNum guessConf disambConf trainR'IO evalR'IO = do
 train tagset guessNum guessConf trainR'IO evalR'IO = do
-  Temp.withTempDirectory "." ".guessed" $ \tmpDir -> do
-  let temp = withTemp tagset tmpDir
+--   Temp.withTempDirectory "." ".guessed" $ \tmpDir -> do
+--   let temp = withTemp tagset tmpDir
 
   putStrLn "\n===== Train guessing model ====="
   guesser <- G.train guessConf trainR'IO evalR'IO
   let guess = guessSent guessNum guesser
   trainG  <- map guess <$> trainR'IO
   evalG   <- map guess <$> evalR'IO
-  temp "train" trainG $ \trainG'IO -> do
-  temp "eval"  evalG  $ \evalG'IO  -> do
+
+--   temp "train" trainG $ \trainG'IO -> do
+--   temp "eval"  evalG  $ \evalG'IO  -> do
 --   let trainG'IO = trainR'IO
 --       evalG'IO = evalR'IO
 
   putStrLn "\n===== Train disambiguation model ====="
-  putStrLn "\n<<<<JUST KIDDING>>>>"
+  putStrLn "\n===== (JUST KIDDING) ====="
   -- disamb <- D.train disambConf trainG'IO evalG'IO
   return $ Concraft tagset guessNum guesser -- disamb
 
@@ -310,6 +310,10 @@ train tagset guessNum guessConf trainR'IO evalR'IO = do
 -- | Store dataset on a disk and run a handler on a list which is read
 -- lazily from the disk.  A temporary file will be automatically
 -- deleted after the handler is done.
+--
+-- NOTE: (11/11/2017): it's just a dummy function right now, which does
+-- not use disk storage at all.
+--
 withTemp
   -- :: (FromJSON w, ToJSON w)
   :: P.Tagset

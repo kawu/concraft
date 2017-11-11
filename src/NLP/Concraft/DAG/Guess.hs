@@ -126,7 +126,7 @@ marginals :: (X.Word w, Ord t, Ord s) => Guesser t s -> X.Sent w t -> DAG () (X.
 marginals gsr = fmap X.tags . marginalsSent gsr
 
 
--- | Replace the probabilities of the sentence with the marginal probabilities
+-- | Replace the probabilities of the sentence labels with the marginal probabilities
 -- stemming from the model.
 marginalsSent :: (X.Word w, Ord t, Ord s) => Guesser t s -> X.Sent w t -> X.Sent w t
 marginalsSent gsr sent
@@ -165,16 +165,24 @@ marginalsCRF gsr dag0 =
 
 -- | Replace the probabilities of the sentence labels with the new probabilities
 -- stemming from the CRF sentence.
+--
+-- TODO: The behavior for OOV words seems unoptimal, since all possible labels
+-- are taken into account, and not only the default CRF ones.  Still, it's not
+-- necessarily a problem, maybe not even from the speed point of view.
+--
 inject
-  :: (Ord t, Ord s)
+  :: (Ord t, Ord s, X.Word w)
   => Guesser t s
   -> DAG () (X.WMap s)
   -> X.Sent w t
   -> X.Sent w t
 inject gsr newSent srcSent =
-  let doit (newSpl, src) =
-        let new = injectWMap gsr newSpl (X.tags src)
-        in  src {X.tags = new}
+  let doit (target, src) =
+        let oldTags = if X.oov (X.word src)
+                      then X.mkWMap . map (,0) . M.keys . simpliMap $ gsr
+                      else X.tags src
+            newTags = injectWMap gsr target oldTags
+        in  src {X.tags = newTags}
   in  fmap doit (DAG.zipE newSent srcSent)
 
 
