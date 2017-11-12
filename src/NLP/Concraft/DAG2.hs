@@ -107,19 +107,23 @@ putModel Concraft{..} = do
   put modelVersion
   put tagset
   put guessNum
-  put guesser
+  G.putGuesser guesser
   D.putDisamb disamb
 
 
 -- | Get the model, given the tag simplification function for the disambigutation model.
-getModel :: (Ord t, Binary t) => (P.Tagset -> t -> P.Tag) -> Get (Concraft t)
+getModel
+  :: (Ord t, Binary t)
+  => (P.Tagset -> t -> P.Tag)
+     -- ^ Simplification function
+  -> Get (Concraft t)
 getModel smp = do
   comp <- get
   when (comp /= modelVersion) $ error $
     "Incompatible model version: " ++ comp ++
     ", expected: " ++ modelVersion
   tagset <- get
-  Concraft tagset <$> get <*> get  <*> D.getDisamb (smp tagset)
+  Concraft tagset <$> get <*> G.getGuesser (smp tagset) <*> D.getDisamb (smp tagset)
 
 
 -- | Save model in a file.  Data is compressed using the gzip format.

@@ -7,6 +7,8 @@ module NLP.Concraft.DAG.Guess
 (
 -- * Types
   Guesser (..)
+, putGuesser
+, getGuesser
 
 -- * Marginals
 , marginals
@@ -25,8 +27,8 @@ module NLP.Concraft.DAG.Guess
 
 
 import Prelude hiding (words)
-import Control.Applicative ((<$>), (<*>))
-import Data.Binary (Binary, put, get)
+import Control.Applicative ((<$>), (<*>), pure)
+import Data.Binary (Binary, put, get, Put, Get)
 import Data.Text.Binary ()
 import System.Console.CmdArgs
 import qualified Data.Set as S
@@ -53,34 +55,51 @@ data Guesser t s = Guesser
     { schemaConf    :: SchemaConf
     , crf           :: CRF.CRF Ob s
     , zeroProbLab   :: s
-      -- ^ Zero probability label is used when the model does not propose any
-      -- interpretation with non-zero probability for an unknown word.
-    , simpliMap     :: M.Map t s
-      -- ^ A map which simplifies the tags of type `t` to simplified tags of
-      -- type `s`.
+    , unkTagSet     :: S.Set t
+      -- ^ The tagset considered for the unknown words (TODO: a solution
+      -- parallel and not 100% consistent with what is implemented in the CRF
+      -- library)
+    , simplify      :: t -> s
+      -- ^ A tag simplification function
     }
 
 
-instance (Ord t, Binary t, Ord s, Binary s) => Binary (Guesser t s) where
-    put Guesser{..} = do
-      put schemaConf
-      put crf
-      put zeroProbLab
-      put simpliMap
-    get = Guesser <$> get <*> get <*> get <*> get
+-- instance (Ord t, Binary t, Ord s, Binary s) => Binary (Guesser t s) where
+--     put Guesser{..} = do
+--       put schemaConf
+--       put crf
+--       put zeroProbLab
+--       put simpliMap
+--     get = Guesser <$> get <*> get <*> get <*> get
 
 
---------------------------
--- Simplify
---------------------------
+-- | Store the entire guessing model apart from the simplification function.
+putGuesser :: (Binary t, Binary s, Ord s) => Guesser t s -> Put
+putGuesser Guesser{..} = do
+  put schemaConf
+  put crf
+  put zeroProbLab
+  put unkTagSet
 
 
--- | Simplify the given label.
-simplify :: (Ord t) => Guesser t s -> t -> s
-simplify Guesser{..} x =
-  case M.lookup x simpliMap of
-    Nothing -> zeroProbLab
-    Just y -> y
+-- | Get the disambiguation model, provided the simplification function.
+-- getGuesser :: (M.Map t T.Tag) -> Get (Guesser t)
+getGuesser :: (Binary t, Binary s, Ord s) => (t -> s) -> Get (Guesser t s)
+getGuesser smp =
+  Guesser <$> get <*> get <*> get <*> get <*> pure smp
+
+
+-- --------------------------
+-- -- Simplify
+-- --------------------------
+--
+--
+-- -- | Simplify the given label.
+-- simplify :: (Ord t) => Guesser t s -> t -> s
+-- simplify Guesser{..} x =
+--   case M.lookup x simpliMap of
+--     Nothing -> zeroProbLab
+--     Just y -> y
 
 
 --------------------------
@@ -166,7 +185,7 @@ inject
 inject gsr newSent srcSent =
   let doit (target, src) =
         let oldTags = if X.oov (X.word src)
-                      then X.mkWMap . map (,0) . M.keys . simpliMap $ gsr
+                      then X.mkWMap . map (,0) . S.toList . unkTagSet $ gsr
                       else X.tags src
             newTags = injectWMap gsr target oldTags
         in  src {X.tags = newTags}
@@ -265,6 +284,9 @@ data TrainConf t s = TrainConf
     , zeroProbLabel :: t
     -- | Label simplification function
     , simplifyLabel :: t -> s
+    -- | Strip the label from irrelevant information.  Used to determine othe set of
+    -- possible tags for unknown words.
+    , stripLabel :: t -> t
     }
 
 
@@ -281,16 +303,16 @@ train TrainConf{..} trainData evalData = do
         AnyInterps  -> CRF.anyInterps
         AnyChosen   -> CRF.anyChosen
         OovChosen   -> CRF.oovChosen
-  tagSet <- S.unions . map tagSetIn <$> trainData
-  let tagMap = M.fromList
-        [ (t, simplifyLabel t)
-        | t <- S.toList tagSet ]
+  tagSet <- S.unions . map (tagSetIn stripLabel) <$> trainData
+--   let tagMap = M.fromList
+--         [ (t, simplifyLabel t)
+--         | t <- S.toList tagSet ]
   crf <- CRF.train sgdArgsT onDiskT
     -- mkR0 (const CRF.presentFeats)
     mkR0 (\r0 -> CRF.hiddenFeats r0 . map (fmap fst))
     (schemed simplifyLabel schema <$> trainData)
     (schemed simplifyLabel schema <$> evalData)
-  return $ Guesser schemaConfT crf (simplifyLabel zeroProbLabel) tagMap
+  return $ Guesser schemaConfT crf (simplifyLabel zeroProbLabel) tagSet simplifyLabel
 
 
 -- | Schematized dataset.
@@ -310,10 +332,11 @@ schemed simpl schema =
             DAG.zipE (schematize schema dag) (fmap mkProb dag)
 
 
--- | Retrieve the tagset in the given sentence.
-tagSetIn :: (Ord t) => X.Sent w t -> S.Set t
-tagSetIn dag = S.fromList
-  [ tag
+-- | Retrieve the tagset in the given sentence, provided the stripping function
+-- (see `stripLabel`).
+tagSetIn :: (Ord t) => (t -> t) -> X.Sent w t -> S.Set t
+tagSetIn strip dag = S.fromList
+  [ strip tag
   | edgeID <- DAG.dagEdges dag
   , let edge = DAG.edgeLabel edgeID dag
   , tag <- M.keys . X.unWMap . X.tags $ edge ]

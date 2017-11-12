@@ -93,19 +93,25 @@ putModel Concraft{..} = do
   put modelVersion
   put tagset
   put guessNum
-  put guesser
+  G.putGuesser guesser
   D.putDisamb disamb
 
 
 -- | Get the model, given the tag simplification function for the disambigutation model.
-getModel :: (Ord t, Binary t) => (P.Tagset -> t -> D.Tag) -> Get (Concraft t)
-getModel smp = do
+getModel
+  :: (Ord t, Binary t)
+  => (P.Tagset -> t -> P.Tag)
+     -- ^ Guesser simplification function
+  -> (P.Tagset -> t -> D.Tag)
+     -- ^ Disamb simplification function
+  -> Get (Concraft t)
+getModel gsrSmp dmbSmp = do
   comp <- get
   when (comp /= modelVersion) $ error $
     "Incompatible model version: " ++ comp ++
     ", expected: " ++ modelVersion
   tagset <- get
-  Concraft tagset <$> get <*> get  <*> D.getDisamb (smp tagset)
+  Concraft tagset <$> get <*> G.getGuesser (gsrSmp tagset) <*> D.getDisamb (dmbSmp tagset)
 
 
 -- | Save model in a file.  Data is compressed using the gzip format.
@@ -115,10 +121,17 @@ saveModel path = BL.writeFile path . GZip.compress . runPut . putModel
 
 
 -- | Load model from a file.
-loadModel :: (Ord t, Binary t) => (P.Tagset -> t -> D.Tag) -> FilePath -> IO (Concraft t)
-loadModel smp path = do
+loadModel
+  :: (Ord t, Binary t)
+  => (P.Tagset -> t -> P.Tag)
+     -- ^ Guesser simplification function
+  -> (P.Tagset -> t -> D.Tag)
+     -- ^ Disamb simplification function
+  -> FilePath
+  -> IO (Concraft t)
+loadModel gsrSmp dmbSmp path = do
     -- x <- Binary.decode . GZip.decompress <$> BL.readFile path
-    x <- runGet (getModel smp) . GZip.decompress <$> BL.readFile path
+    x <- runGet (getModel gsrSmp dmbSmp) . GZip.decompress <$> BL.readFile path
     x `seq` return x
 
 
