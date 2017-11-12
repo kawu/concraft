@@ -3,10 +3,15 @@
 {-# LANGUAGE TupleSections #-}
 
 
-module NLP.Concraft.DAG.Disamb
+-- | A version of the disambigation model adapted to perform sentence
+-- segmentation as well.
+
+
+module NLP.Concraft.DAG.DisambSeg
 (
 -- * Types
-  Disamb (..)
+  Tag (..)
+, Disamb (..)
 , putDisamb
 , getDisamb
 
@@ -29,9 +34,6 @@ module NLP.Concraft.DAG.Disamb
 
 -- * Pruning
 , prune
-
--- * Internal
-, schematize
 ) where
 
 
@@ -59,17 +61,27 @@ import qualified NLP.Concraft.Disamb.Positional as P
 import           NLP.Concraft.DAG.Schema hiding (schematize)
 import qualified NLP.Concraft.DAG.Morphosyntax as X
 
+import NLP.Concraft.DAG.Disamb (schematize)
+
+
+-- | The internal tag type.
+data Tag = Tag
+  { posiTag :: T.Tag
+    -- ^ Positional tag
+  , hasEos :: Bool
+    -- ^ End-of-sentence marker
+  } deriving (Show, Eq, Ord)
+
 
 -- | A disambiguation model.
 data Disamb t = Disamb
     { tiers         :: [P.Tier]
     , schemaConf    :: SchemaConf
     , crf           :: CRF.CRF Ob P.Atom
-    -- , simpliMap     :: M.Map t T.Tag
-    , simplify      :: t -> T.Tag
-      -- ^ A map which simplifies the tags of generic type `t` to simplified
-      -- positional tags. The motivation behind this is that tags can have a
-      -- richer structure.
+    , simplify      :: t -> Tag
+      -- ^ A function which simplifies the tags of the generic type `t` to (i)
+      -- the corresponding positional tags and (ii) information if the segment
+      -- represents sentence end.
       --
       -- NOTE: it can happen in real situations that a tag is encountered which
       -- is not known by the model. It would be nice to be able to treat it as
@@ -78,11 +90,6 @@ data Disamb t = Disamb
       -- should be done at a different level (where more information about the
       -- structure of `t` is known)
     }
-
-
--- instance (Binary t) => Binary (Disamb t) where
---     put Disamb{..} = put tiers >> put schemaConf >> put crf >> put simpliMap
---     get = Disamb <$> get <*> get <*> get <*> get
 
 
 -- | Store the entire disambiguation model apart from the simplification
@@ -94,78 +101,9 @@ putDisamb Disamb{..} =
 
 -- | Get the disambiguation model, provided the simplification function.
 -- getDisamb :: (M.Map t T.Tag) -> Get (Disamb t)
-getDisamb :: (t -> T.Tag) -> Get (Disamb t)
+getDisamb :: (t -> Tag) -> Get (Disamb t)
 getDisamb smp =
   Disamb <$> get <*> get <*> get <*> pure smp
-
-
---------------------------
--- Simplify
---------------------------
-
-
--- -- | Simplify the given label.
--- simplify :: (Ord t) => Disamb t -> t -> T.Tag
--- simplify Disamb{..} x =
---   case M.lookup x simpliMap of
---     Nothing -> defaultTag
---     Just y -> y
---   where
---     defaultTag = snd $ M.findMin simpliMap
-
-
---------------------------
--- Schematize
---------------------------
-
-
--- | Schematize the input sentence according to 'schema' rules.
-schematize :: Schema w [t] a -> X.Sent w [t] -> CRF.Sent Ob t
-schematize schema sent =
-  DAG.mapE f sent
-  where
-    f i = const $ CRF.mkWord (obs i) (lbs i)
-    obs = S.fromList . Ox.execOx . schema sent
-    lbs i = X.interpsSet w
-      where w = DAG.edgeLabel i sent
-
-
--- --------------------------
--- -- Marginals
--- --------------------------
---
---
--- -- | Determine the marginal probabilities of to individual labels in the sentence.
--- marginals :: (X.Word w, Ord t) => Disamb t -> X.Sent w t -> DAG () (X.WMap t)
--- marginals dmb = fmap X.tags . marginalsSent dmb
---
---
--- -- | Determine the marginal probabilities of to individual labels in the sentence.
--- -- marginalsSent :: (X.Word w, Ord t) => Disamb t -> X.Sent w t -> DAG () (X.WMap [P.Atom])
--- marginalsSent :: (X.Word w, Ord t) => Disamb t -> X.Sent w t -> X.Sent w t
--- marginalsSent dmb sent
---   = (\new -> inject dmb new sent)
---   . fmap getTags
---   . marginalsCRF dmb
---   $ sent
---   where
---     getTags = X.mkWMap . M.toList . choice -- CRF.unProb . snd
---     -- below we mix the chosen and the potential interpretations together
---     choice w = M.unionWith (+)
---       (CRF.unProb . snd $ w)
---       (M.fromList . map (,0) . interps $ w)
---     interps = S.toList . CRF.lbs . fst
---
---
--- -- | Ascertain the marginal probabilities of the individual labels in the sentence.
--- marginalsCRF :: (X.Word w, Ord t) => Disamb t -> X.Sent w t -> CRF.SentL Ob P.Atom
--- marginalsCRF dmb
---   = CRF.marginals (crf dmb)
---   . schematize schema
---   . X.mapSent (split . simplify dmb)
---   where
---     schema = fromConf (schemaConf dmb)
---     split  = P.split (tiers dmb)
 
 
 --------------------------
@@ -199,18 +137,8 @@ injectWMap
 injectWMap dmb newSpl src = X.mkWMap
   [ ( tag
     , maybe 0 id $
-      M.lookup (P.split (tiers dmb) (simplify dmb tag) Nothing) (X.unWMap newSpl) )
+      M.lookup (split (tiers dmb) (simplify dmb tag)) (X.unWMap newSpl) )
   | (tag, _) <- M.toList (X.unWMap src) ]
-
-
--- -- | Unsplit a complex tag (assuming that it is one of the interpretations of
--- -- the word).
--- unSplit :: Eq t => (r -> t) -> X.Seg w r -> t -> r
--- unSplit split word x = case jy of
---     Just y  -> y
---     Nothing -> error "unSplit: no such interpretation"
---   where
---     jy = List.find ((==x) . split) (X.interps word)
 
 
 --------------------------
@@ -247,10 +175,9 @@ probsCRF :: (X.Word w, Ord t) => CRF.ProbType -> Disamb t -> X.Sent w t -> CRF.S
 probsCRF probTyp dmb
   = CRF.probs probTyp (crf dmb)
   . schematize schema
-  . X.mapSent (split . simplify dmb)
+  . X.mapSent (split (tiers dmb) . simplify dmb)
   where
     schema = fromConf (schemaConf dmb)
-    split  = \t -> P.split (tiers dmb) t Nothing
 
 
 --------------------------
@@ -278,7 +205,7 @@ data TrainConf t = TrainConf
   , sgdArgsT    :: SGD.SgdArgs
   , onDiskT     :: Bool
   -- | Label simplification function
-  , simplifyLabel :: t -> T.Tag
+  , simplifyLabel :: t -> Tag
   }
 
 
@@ -296,22 +223,21 @@ train TrainConf{..} trainData evalData = do
 --         [ (t, simplifyLabel t)
 --         | t <- S.toList tagSet ]
   crf <- CRF.train (length tiersT) CRF.selectHidden sgdArgsT onDiskT
-    (schemed simplifyLabel schema split <$> trainData)
-    (schemed simplifyLabel schema split <$> evalData)
+    (schemed simplifyLabel schema (split tiersT) <$> trainData)
+    (schemed simplifyLabel schema (split tiersT) <$> evalData)
   putStr "\nNumber of features: " >> print (CRF.size crf)
   return $ Disamb tiersT schemaConfT crf simplifyLabel -- tagMap
   where
     schema = fromConf schemaConfT
-    split  = \t -> P.split tiersT t Nothing
 
 
 -- | Schematized dataset.
 schemed
   -- :: (X.Word w, Ord t)
   :: (Ord a)
-  => (t -> T.Tag)
+  => (t -> Tag)
   -> Schema w [a] b
-  -> (T.Tag -> [a])
+  -> (Tag -> [a])
   -> [X.Sent w t]
   -> [CRF.SentL Ob a]
 schemed simpl schema split =
@@ -331,3 +257,14 @@ schemed simpl schema split =
 --   | edgeID <- DAG.dagEdges dag
 --   , let edge = DAG.edgeLabel edgeID dag
 --   , tag <- M.keys . X.unWMap . X.tags $ edge ]
+
+
+
+--------------------------
+-- Utils
+--------------------------
+
+
+-- | Split the tag with respect to the given tiers.
+split :: [P.Tier] -> Tag -> [P.Atom]
+split tiers tag = P.split tiers (posiTag tag) (Just $ hasEos tag)

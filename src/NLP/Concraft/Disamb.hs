@@ -89,7 +89,7 @@ disamb Disamb{..} sent
     $ sent
   where
     schema  = fromConf schemaConf
-    split   = P.split tiers
+    split   = \t -> P.split tiers t Nothing
     embed   = unSplit split
 
 
@@ -121,7 +121,7 @@ marginals Disamb{..} sent
     $ sent
   where
     schema  = fromConf schemaConf
-    split   = P.split tiers
+    split   = \t -> P.split tiers t Nothing
     embed w = X.mkWMap . zip (X.interps w)
 
 
@@ -161,7 +161,7 @@ train TrainConf{..} trainData evalData = do
     return $ Disamb tiersT schemaConfT crf
   where
     schema = fromConf schemaConfT
-    split  = P.split tiersT
+    split  = \t -> P.split tiersT t Nothing
 
 -- Improve disamb model.
 train ReTrainConf{..} trainData evalData = do
@@ -173,7 +173,7 @@ train ReTrainConf{..} trainData evalData = do
   where
     Disamb{..} = initDmb
     schema = fromConf schemaConf
-    split  = P.split tiers
+    split  = \t -> P.split tiers t Nothing
 
 
 -- | Schematized data from the plain file.

@@ -4,7 +4,7 @@
 -- | Top-level module adated to DAGs, guessing and disambiguation.
 
 
-module NLP.Concraft.DAG2
+module NLP.Concraft.DAGSeg
 (
 -- * Model
   Concraft (..)
@@ -67,7 +67,7 @@ import           NLP.Concraft.Format.Temp
 import qualified NLP.Concraft.DAG.Morphosyntax as X
 import           NLP.Concraft.DAG.Morphosyntax (Sent, WMap)
 import qualified NLP.Concraft.DAG.Guess as G
-import qualified NLP.Concraft.DAG.Disamb as D
+import qualified NLP.Concraft.DAG.DisambSeg as D
 
 
 ---------------------
@@ -76,7 +76,7 @@ import qualified NLP.Concraft.DAG.Disamb as D
 
 
 modelVersion :: String
-modelVersion = "dag2:0.11"
+modelVersion = "dagseg:0.11"
 
 
 -- | Concraft data.
@@ -84,22 +84,8 @@ data Concraft t = Concraft
   { tagset        :: P.Tagset
   , guessNum      :: Int
   , guesser       :: G.Guesser t P.Tag
-  , disamb        :: D.Disamb t }
-
-
--- instance (Ord t, Binary t) => Binary (Concraft t) where
---     put Concraft{..} = do
---         put modelVersion
---         put tagset
---         put guessNum
---         put guesser
---         put disamb
---     get = do
---         comp <- get
---         when (comp /= modelVersion) $ error $
---             "Incompatible model version: " ++ comp ++
---             ", expected: " ++ modelVersion
---         Concraft <$> get <*> get <*> get  <*> get
+  , disamb        :: D.Disamb t
+  }
 
 
 putModel :: (Ord t, Binary t) => Concraft t -> Put
@@ -112,7 +98,7 @@ putModel Concraft{..} = do
 
 
 -- | Get the model, given the tag simplification function for the disambigutation model.
-getModel :: (Ord t, Binary t) => (P.Tagset -> t -> P.Tag) -> Get (Concraft t)
+getModel :: (Ord t, Binary t) => (P.Tagset -> t -> D.Tag) -> Get (Concraft t)
 getModel smp = do
   comp <- get
   when (comp /= modelVersion) $ error $
@@ -129,7 +115,7 @@ saveModel path = BL.writeFile path . GZip.compress . runPut . putModel
 
 
 -- | Load model from a file.
-loadModel :: (Ord t, Binary t) => (P.Tagset -> t -> P.Tag) -> FilePath -> IO (Concraft t)
+loadModel :: (Ord t, Binary t) => (P.Tagset -> t -> D.Tag) -> FilePath -> IO (Concraft t)
 loadModel smp path = do
     -- x <- Binary.decode . GZip.decompress <$> BL.readFile path
     x <- runGet (getModel smp) . GZip.decompress <$> BL.readFile path

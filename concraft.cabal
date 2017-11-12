@@ -62,8 +62,10 @@ library
       , NLP.Concraft.DAG.Schema
       , NLP.Concraft.DAG.Guess
       , NLP.Concraft.DAG.Disamb
+      , NLP.Concraft.DAG.DisambSeg
       -- , NLP.Concraft.DAG
       , NLP.Concraft.DAG2
+      , NLP.Concraft.DAGSeg
 
     other-modules:
         NLP.Concraft.Disamb.Positional
