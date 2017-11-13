@@ -33,7 +33,7 @@ library
       , vector                  >= 0.10     && < 0.11
       , vector-binary           >= 0.1      && < 0.2
       , monad-ox                >= 0.3      && < 0.4
-      , sgd                     >= 0.3.3    && < 0.4
+      , sgd                     >= 0.4.0    && < 0.5
       , tagset-positional       >= 0.3      && < 0.4
       , crf-chain1-constrained  >= 0.4      && < 0.5
       , crf-chain2-tiers        >= 0.3      && < 0.4

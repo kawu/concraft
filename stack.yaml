@@ -7,13 +7,14 @@ resolver: lts-1.15
 packages:
 - '.'
 - '../pedestrian-dag'
+- '../sgd'
 - '../crf-chain1-constrained'
 - '../crf-chain2-tiers'
 - '../tagset-positional'
 
 # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
 extra-deps:
-- sgd-0.3.7
+- sgd-0.4.0
 - data-lens-2.10.7
 - monad-codec-0.2.0
 - vector-binary-0.1.1
