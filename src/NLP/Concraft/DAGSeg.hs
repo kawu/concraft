@@ -32,8 +32,8 @@ module NLP.Concraft.DAGSeg
 , tag
 -- , tag'
 
--- * Training
-, train
+-- -- * Training
+-- , train
 
 -- * Pruning
 , prune
@@ -84,6 +84,7 @@ data Concraft t = Concraft
   { tagset        :: P.Tagset
   , guessNum      :: Int
   , guesser       :: G.Guesser t P.Tag
+  , segmenter     :: D.Disamb t
   , disamb        :: D.Disamb t
   }
 
@@ -94,6 +95,7 @@ putModel Concraft{..} = do
   put tagset
   put guessNum
   G.putGuesser guesser
+  D.putDisamb segmenter
   D.putDisamb disamb
 
 
@@ -103,7 +105,8 @@ getModel
   => (P.Tagset -> t -> P.Tag)
      -- ^ Guesser simplification function
   -> (P.Tagset -> t -> D.Tag)
-     -- ^ Disamb simplification function
+     -- ^ Segmentation/disamb simplification function (TODO: two different
+     -- simplification functions?)
   -> Get (Concraft t)
 getModel gsrSmp dmbSmp = do
   comp <- get
@@ -111,7 +114,10 @@ getModel gsrSmp dmbSmp = do
     "Incompatible model version: " ++ comp ++
     ", expected: " ++ modelVersion
   tagset <- get
-  Concraft tagset <$> get <*> G.getGuesser (gsrSmp tagset) <*> D.getDisamb (dmbSmp tagset)
+  Concraft tagset <$> get
+    <*> G.getGuesser (gsrSmp tagset)
+    <*> D.getDisamb (dmbSmp tagset)
+    <*> D.getDisamb (dmbSmp tagset)
 
 
 -- | Save model in a file.  Data is compressed using the gzip format.
@@ -280,75 +286,75 @@ tag k crf = disambMarginals (disamb crf) . guessSent k (guesser crf)
 ---------------------
 
 
--- | Train the `Concraft` model.
--- No reanalysis of the input data will be performed.
+-- -- | Train the `Concraft` model.
+-- -- No reanalysis of the input data will be performed.
+-- --
+-- -- The `FromJSON` and `ToJSON` instances are used to store processed
+-- -- input data in temporary files on a disk.
+-- train
+--     :: (X.Word w, Ord t)
+--     => P.Tagset             -- ^ A morphosyntactic tagset to which `P.Tag`s
+--                             --   of the training and evaluation input data
+--                             --   must correspond.
+--     -> Int                  -- ^ How many tags is the guessing model supposed
+--                             --   to produce for a given OOV word?  It will be
+--                             --   used (see `G.guessSent`) on both training and
+--                             --   evaluation input data prior to the training
+--                             --   of the disambiguation model.
+--     -> G.TrainConf t P.Tag  -- ^ Training configuration for the guessing model.
+--     -> D.TrainConf t        -- ^ Training configuration for the
+--                             --   disambiguation model.
+--     -> IO [Sent w t]    -- ^ Training dataset.  This IO action will be
+--                             --   executed a couple of times, so consider using
+--                             --   lazy IO if your dataset is big.
+--     -> IO [Sent w t]    -- ^ Evaluation dataset IO action.  Consider using
+--                             --   lazy IO if your dataset is big.
+--     -> IO (Concraft t)
+-- train tagset guessNum guessConf disambConf trainR'IO evalR'IO = do
+--   Temp.withTempDirectory "." ".guessed" $ \tmpDir -> do
+--   let temp = withTemp tagset tmpDir
 --
--- The `FromJSON` and `ToJSON` instances are used to store processed
--- input data in temporary files on a disk.
-train
-    :: (X.Word w, Ord t)
-    => P.Tagset             -- ^ A morphosyntactic tagset to which `P.Tag`s
-                            --   of the training and evaluation input data
-                            --   must correspond.
-    -> Int                  -- ^ How many tags is the guessing model supposed
-                            --   to produce for a given OOV word?  It will be
-                            --   used (see `G.guessSent`) on both training and
-                            --   evaluation input data prior to the training
-                            --   of the disambiguation model.
-    -> G.TrainConf t P.Tag  -- ^ Training configuration for the guessing model.
-    -> D.TrainConf t        -- ^ Training configuration for the
-                            --   disambiguation model.
-    -> IO [Sent w t]    -- ^ Training dataset.  This IO action will be
-                            --   executed a couple of times, so consider using
-                            --   lazy IO if your dataset is big.
-    -> IO [Sent w t]    -- ^ Evaluation dataset IO action.  Consider using
-                            --   lazy IO if your dataset is big.
-    -> IO (Concraft t)
-train tagset guessNum guessConf disambConf trainR'IO evalR'IO = do
-  Temp.withTempDirectory "." ".guessed" $ \tmpDir -> do
-  let temp = withTemp tagset tmpDir
-
-  putStrLn "\n===== Train guessing model ====="
-  guesser <- G.train guessConf trainR'IO evalR'IO
-  let guess = guessSent guessNum guesser
-  trainG  <- map guess <$> trainR'IO
-  evalG   <- map guess <$> evalR'IO
-
-  temp "train" trainG $ \trainG'IO -> do
-  temp "eval"  evalG  $ \evalG'IO  -> do
-
-  putStrLn "\n===== Train disambiguation model ====="
-  disamb <- D.train disambConf trainG'IO evalG'IO
-  return $ Concraft tagset guessNum guesser disamb
-
-
----------------------
--- Temporary storage
----------------------
-
-
--- | Store dataset on a disk and run a handler on a list which is read
--- lazily from the disk.  A temporary file will be automatically
--- deleted after the handler is done.
+--   putStrLn "\n===== Train guessing model ====="
+--   guesser <- G.train guessConf trainR'IO evalR'IO
+--   let guess = guessSent guessNum guesser
+--   trainG  <- map guess <$> trainR'IO
+--   evalG   <- map guess <$> evalR'IO
 --
--- NOTE: (11/11/2017): it's just a dummy function right now, which does
--- not use disk storage at all.
+--   temp "train" trainG $ \trainG'IO -> do
+--   temp "eval"  evalG  $ \evalG'IO  -> do
 --
-withTemp
-  -- :: (FromJSON w, ToJSON w)
-  :: P.Tagset
-  -> FilePath                     -- ^ Directory to create the file in
-  -> String                       -- ^ Template for `Temp.withTempFile`
-  -> [Sent w t]                   -- ^ Input dataset
-  -> (IO [Sent w t] -> IO a)      -- ^ Handler
-  -> IO a
-withTemp _      _   _    [] handler = handler (return [])
-withTemp tagset dir tmpl xs handler =
-  Temp.withTempFile dir tmpl $ \tmpPath tmpHandle -> do
-    hClose tmpHandle
-    let txtSent = X.mapSent $ P.showTag tagset
-        tagSent = X.mapSent $ P.parseTag tagset
-    handler (return xs)
+--   putStrLn "\n===== Train disambiguation model ====="
+--   disamb <- D.train disambConf trainG'IO evalG'IO
+--   return $ Concraft tagset guessNum guesser disamb
+--
+--
+-- ---------------------
+-- -- Temporary storage
+-- ---------------------
+--
+--
+-- -- | Store dataset on a disk and run a handler on a list which is read
+-- -- lazily from the disk.  A temporary file will be automatically
+-- -- deleted after the handler is done.
+-- --
+-- -- NOTE: (11/11/2017): it's just a dummy function right now, which does
+-- -- not use disk storage at all.
+-- --
+-- withTemp
+--   -- :: (FromJSON w, ToJSON w)
+--   :: P.Tagset
+--   -> FilePath                     -- ^ Directory to create the file in
+--   -> String                       -- ^ Template for `Temp.withTempFile`
+--   -> [Sent w t]                   -- ^ Input dataset
+--   -> (IO [Sent w t] -> IO a)      -- ^ Handler
+--   -> IO a
+-- withTemp _      _   _    [] handler = handler (return [])
+-- withTemp tagset dir tmpl xs handler =
+--   Temp.withTempFile dir tmpl $ \tmpPath tmpHandle -> do
+--     hClose tmpHandle
+--     let txtSent = X.mapSent $ P.showTag tagset
+--         tagSent = X.mapSent $ P.parseTag tagset
+--     handler (return xs)
 
 
 ---------------------
@@ -356,8 +362,8 @@ withTemp tagset dir tmpl xs handler =
 ---------------------
 
 
--- | Prune disambiguation model: discard model features with
--- absolute values (in log-domain) lower than the given threshold.
+-- | Prune the disambiguation model: discard model features with absolute values
+-- (in log-domain) lower than the given threshold.
 prune :: Double -> Concraft t -> Concraft t
 prune x concraft =
     let disamb' = D.prune x (disamb concraft)
