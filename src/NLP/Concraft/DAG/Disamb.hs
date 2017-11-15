@@ -49,7 +49,7 @@ import qualified Data.DAG as DAG
 import           Data.DAG (DAG)
 
 import qualified Control.Monad.Ox as Ox
-import qualified Numeric.SGD as SGD
+import qualified Numeric.SGD.Momentum as SGD
 import qualified Data.CRF.Chain2.Tiers.DAG as CRF
 import qualified Data.Tagset.Positional as T
 

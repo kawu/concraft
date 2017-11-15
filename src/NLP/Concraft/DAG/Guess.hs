@@ -42,7 +42,7 @@ import qualified Control.Monad.Ox as Ox
 -- import qualified Data.CRF.Chain1.Constrained as CRF
 import qualified Data.CRF.Chain1.Constrained.DAG as CRF
 -- import qualified Data.CRF.Chain1.Constrained.Dataset.External as CRF.Ext
-import qualified Numeric.SGD as SGD
+import qualified Numeric.SGD.Momentum as SGD
 
 -- import           NLP.Concraft.Schema hiding (schematize)
 -- import qualified NLP.Concraft.Morphosyntax as X
