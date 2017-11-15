@@ -15,6 +15,7 @@ module NLP.Concraft.Morphosyntax.Accuracy
 ) where 
 
 
+import           Prelude hiding (Word)
 import           Data.List (foldl')
 import qualified Data.Set as S
 import qualified Data.Map as M

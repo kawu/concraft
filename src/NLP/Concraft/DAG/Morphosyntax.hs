@@ -29,6 +29,7 @@ module NLP.Concraft.DAG.Morphosyntax
 ) where
 
 
+import           Prelude hiding (Word)
 import           Control.Applicative ((<$>), (<*>))
 import           Control.Arrow (first)
 import           Data.Aeson

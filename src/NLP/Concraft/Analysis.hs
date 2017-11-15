@@ -15,6 +15,7 @@ module NLP.Concraft.Analysis
 ) where
 
 
+import           Prelude hiding (Word)
 import qualified Control.Monad.LazyIO as LazyIO
 import qualified Data.Text.Lazy as L
 

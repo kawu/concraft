@@ -21,6 +21,7 @@ module NLP.Concraft
 ) where
 
 
+import           Prelude hiding (Word)
 import           System.IO (hClose)
 import           Control.Applicative ((<$>), (<*>))
 import           Control.Monad (when)

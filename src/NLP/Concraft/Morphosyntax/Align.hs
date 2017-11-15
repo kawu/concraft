@@ -10,6 +10,7 @@ module NLP.Concraft.Morphosyntax.Align
 ) where
 
 
+import           Prelude hiding (Word)
 import           Control.Applicative ((<|>))
 import           Data.Maybe (fromJust)
 import           Data.List (find)

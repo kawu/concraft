@@ -26,11 +26,11 @@ library
         base                    >= 4        && < 5
       , array                   >= 0.4      && < 0.6
       , containers              >= 0.4      && < 0.6
-      , binary                  >= 0.5      && < 0.8
+      , binary                  >= 0.5      && < 0.9
       , bytestring              >= 0.9      && < 0.11
       , text                    >= 0.11     && < 1.3
-      , text-binary             >= 0.1      && < 0.2
-      , vector                  >= 0.10     && < 0.11
+      , text-binary             >= 0.1      && < 0.3
+      , vector                  >= 0.10     && < 0.12
       , vector-binary           >= 0.1      && < 0.2
       , monad-ox                >= 0.3      && < 0.4
       , sgd                     >= 0.4.0    && < 0.5
@@ -38,15 +38,15 @@ library
       , crf-chain1-constrained  >= 0.4      && < 0.5
       , crf-chain2-tiers        >= 0.3      && < 0.4
       , monad-codec             >= 0.2      && < 0.3
-      , data-lens               >= 2.10     && < 2.11
-      , transformers            >= 0.2      && < 0.5
-      , comonad                 >= 4.0      && < 4.3
-      , temporary               >= 1.1      && < 1.2
-      , aeson                   >= 0.6      && < 0.9
-      , zlib                    >= 0.5      && < 0.6
+      , data-lens               >= 2.10     && < 2.12
+      , transformers            >= 0.2      && < 0.6
+      , comonad                 >= 4.0      && < 5.1
+      , aeson                   >= 0.6      && < 1.1
+      , zlib                    >= 0.5      && < 0.7
       , lazy-io                 >= 0.1      && < 0.2
       , cmdargs                 >= 0.10     && < 0.11
       , pedestrian-dag          >= 0.2      && < 0.3
+      , temporary       >= 1.1      && < 1.3
 
     exposed-modules:
         NLP.Concraft
