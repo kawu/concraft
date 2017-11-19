@@ -14,7 +14,6 @@ module NLP.Concraft.DAGSeg
 
 -- * Annotation
 , Anno
-, replace
 
 -- * Best paths
 , findOptimalPaths
@@ -27,8 +26,8 @@ module NLP.Concraft.DAGSeg
 , disambProbs
 
 -- * Tagging
-, guess
 , guessSent
+, guess
 , tag
 -- , tag'
 
@@ -40,9 +39,10 @@ module NLP.Concraft.DAGSeg
 ) where
 
 
+-- import           Prelude hiding (Word)
 import           System.IO (hClose)
 import           Control.Applicative ((<$>), (<*>)) -- , (<|>))
-import           Control.Arrow (first)
+import           Control.Arrow (first, second)
 import           Control.Monad (when, guard)
 -- import           Data.Maybe (listToMaybe)
 import qualified Data.Foldable as F
@@ -56,6 +56,8 @@ import           Data.Aeson
 import qualified System.IO.Temp as Temp
 import qualified Data.ByteString.Lazy as BL
 import qualified Codec.Compression.GZip as GZip
+import           Data.Ord (comparing)
+import           Data.List (sortBy)
 
 import           Data.DAG (DAG, EdgeID)
 import qualified Data.DAG as DAG
@@ -157,10 +159,23 @@ replace anno sent =
   fmap join $ DAG.zipE anno sent
   where
     join (m, seg) = seg {X.tags = X.fromMap m}
---     apply f
---       = X.fromMap
---       . M.mapWithKey (\key _val -> f M.! key)
---       . X.unWMap
+
+
+-- | Insert the guessing results into the sentence. Only interpretations of OOV
+-- words will be extended.  The probabilities of the new tags are set to 0.
+insertGuessed :: (X.Word w, Ord t) => Anno t Double -> Sent w t -> Sent w t
+insertGuessed anno sent =
+  fmap join $ DAG.zipE anno sent
+  where
+    join (gueMap, seg)
+      | X.oov (X.word seg) =
+          let oldMap  = X.unWMap (X.tags seg)
+              gueMap0 = M.fromList
+                      . map (second $ const 0)
+                      $ M.toList gueMap
+              newMap  = M.unionWith (+) oldMap gueMap0
+          in  seg {X.tags = X.fromMap newMap}
+      | otherwise = seg
 
 
 -- | Extract marginal annotations from the given sentence.
@@ -245,9 +260,19 @@ trimOOV k =
   fmap trim
   where
     trim edge = if X.oov edge
-      then trimEdge edge
+      then edge {X.tags = trimWMap k (X.tags edge)}
       else edge
-    trimEdge edge = edge {X.tags = X.trim k (X.tags edge)}
+    trimWMap n = X.fromMap . trimMap n . X.unWMap
+
+
+-- | Trim down the set of potential labels to the `k` most probable ones.
+trimMap :: (Ord t) => Int -> M.Map t Double -> M.Map t Double
+trimMap k
+  = M.fromList
+  . take k
+  . reverse
+  . sortBy (comparing snd)
+  . M.toList
 
 
 ---------------------
@@ -255,18 +280,22 @@ trimOOV k =
 ---------------------
 
 
--- | Determine marginal probabilities corresponding to individual tags w.r.t.
+-- | Extend the OOV words with new, guessed interpretations.
+--
+-- Determine marginal probabilities corresponding to individual tags w.r.t.
 -- the guessing model and, afterwards, trim the sentence to keep only the `k`
 -- most probably labels for each OOV edge. Note that, for OOV words, the entire
 -- set of default tags is considered.
+--
 guessSent :: (X.Word w, Ord t) => Int -> G.Guesser t P.Tag -> Sent w t -> Sent w t
-guessSent k gsr sent = trimOOV k $ replace (guessMarginals gsr sent) sent
+guessSent k gsr sent = insertGuessed (fmap (trimMap k) (guessMarginals gsr sent)) sent
+-- guessSent k gsr sent = trimOOV k $ replace (guessMarginals gsr sent) sent
 
 
 -- | Perform guessing, trimming, and finally determine marginal probabilities
 -- corresponding to individual tags w.r.t. the guessing model.
 guess :: (X.Word w, Ord t) => Int -> G.Guesser t P.Tag -> Sent w t -> Anno t Double
-guess k gsr = extract . guessSent k gsr
+guess k gsr sent = extract . trimOOV k $ replace (guessMarginals gsr sent) sent
 
 
 -- | Perform guessing, trimming, and finally determine marginal probabilities
