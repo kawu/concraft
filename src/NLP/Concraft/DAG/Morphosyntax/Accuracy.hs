@@ -110,6 +110,9 @@ data AccCfg = AccCfg
     -- ^ If weak, there has to be an overlap in the tags assigned to a given
     -- segment in both datasets. Otherwise, the two sets of tags have to be
     -- identical.
+  , discardProb0 :: Bool
+    -- ^ Whether sentences with near 0 probability should be discarded from
+    -- evaluation.
   }
 
 
@@ -129,13 +132,27 @@ goodAndBad
   -> Sent w P.Tag
   -> Sent w P.Tag
   -> (Int, Int)
-goodAndBad cfg dag1 dag2 =
-    F.foldl' gather (0, 0) $ DAG.zipE dag1 dag2
+goodAndBad cfg dag1 dag2
+  | discardProb0 cfg && (dagProb dag1 < eps || dagProb dag2 < eps) = (0, 0)
+  | otherwise =
+    -- By using `DAG.zipE'`, we allow the DAGs to be slighly different in terms
+    -- of their edge sets.
+      F.foldl' gather (0, 0) $ DAG.zipE' dag1 dag2
   where
-    gather stats (seg1, seg2)
+    eps = 1e-9
+    gather stats (Just seg1, Just seg2)
       | accSel cfg == All || (accSel cfg == Oov && oov seg1) =
           gather0 stats (seg1, seg2)
       | otherwise = stats
+    gather (good, bad) segPair
+      | accSel cfg == All || (accSel cfg == Oov && oov seg) =
+          (good, bad + 1)
+      | otherwise = (good, bad)
+      where
+        seg = case segPair of
+          (Just seg, Nothing) -> seg
+          (Nothing, Just seg) -> seg
+          _ -> error "Accuracy.goodAndBad: impossible happened"
     gather0 (good, bad) (seg1, seg2) =
       if consistent (choice cfg seg1) (choice cfg seg2)
       then (good + 1, bad)
@@ -170,6 +187,40 @@ accuracy cfg data1 data2 =
         (good, bad) = F.foldl' add (0, 0) xs
         add (g, b) (g', b') = (g + g', b + b')
     in  fromIntegral good / fromIntegral (good + bad)
+
+
+------------------------------------------------------
+-- Verification
+------------------------------------------------------
+
+
+-- | Compute the probability of the DAG, based on the probabilities assigned to
+-- different edges and their labels.
+dagProb :: Sent w t -> Double
+dagProb dag = sum
+  [ fromEdge edgeID
+  | edgeID <- DAG.dagEdges dag
+  , DAG.isInitialEdge edgeID dag ]
+  where
+    fromEdge edgeID
+      = edgeProb edgeID
+      * fromNode (DAG.endsWith edgeID dag)
+    edgeProb edgeID =
+      let Seg{..} = DAG.edgeLabel edgeID dag
+      in  sum . map snd . M.toList $ unWMap tags
+    fromNode nodeID =
+      case DAG.outgoingEdges nodeID dag of
+        [] -> 1
+        xs -> sum (map fromEdge xs)
+
+
+-- -- | Filter out the sentences with ~0 probability.
+-- verifyDataset :: [Sent w t] -> [Sent w t]
+-- verifyDataset =
+--   filter verify
+--   where
+--     verify dag = dagProb dag >= eps
+--     eps = 1e-9
 
 
 --------------------------
