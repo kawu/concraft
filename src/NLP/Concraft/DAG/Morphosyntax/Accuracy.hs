@@ -5,13 +5,7 @@ module NLP.Concraft.DAG.Morphosyntax.Accuracy
 (
 -- * Stats
   accuracy
--- , Stats (..)
---
--- -- * Accuracy
--- , weakLB
--- , weakUB
--- , strongLB
--- , strongUB
+, AccSel (..)
 ) where
 
 
@@ -34,12 +28,6 @@ import           NLP.Concraft.DAG.Morphosyntax
 
 
 
--- -- | Statistics.
--- data Stats = Stats
---     { good :: Int   -- ^ Number of correct tags
---     , gold :: Int } -- ^ Number of segments in gold corpus
---
---
 -- -- | Add stats,
 -- (.+.) :: Stats -> Stats -> Stats
 -- Stats x y .+. Stats x' y' = Stats (x + x') (y + y')
@@ -108,15 +96,31 @@ import           NLP.Concraft.DAG.Morphosyntax
 --     stats xs _ = Stats (length xs) (length xs)
 
 
+-- | Accuracy selector.
+data AccSel
+  = All
+    -- ^ All words
+  | Oov
+    -- ^ Only OOV words
+  -- -- | NotOov
+  deriving (Eq, Ord, Show)
+
+
 goodAndBad
-  :: P.Tagset
+  :: Word w
+  => P.Tagset
+  -> AccSel
   -> Sent w P.Tag
   -> Sent w P.Tag
   -> (Int, Int)
-goodAndBad tagset dag1 dag2 =
+goodAndBad tagset sel dag1 dag2 =
     F.foldl' gather (0, 0) $ DAG.zipE dag1 dag2
   where
-    gather (good, bad) (seg1, seg2) =
+    gather stats (seg1, seg2)
+      | sel == All || (sel == Oov && oov seg1) =
+          gather0 stats (seg1, seg2)
+      | otherwise = stats
+    gather0 (good, bad) (seg1, seg2) =
       if consistent (choice tagset seg1) (choice tagset seg2)
       then (good + 1, bad)
       else (good, bad + 1)
@@ -126,37 +130,27 @@ goodAndBad tagset dag1 dag2 =
           (not . S.null)
           (S.intersection xs ys)
 
---     labels1 = fmap (best . C.unY) (fmap snd dag)
---     labels2 = fmap best $ probs' MaxProbs crf (fmap fst dag)
---
---     best zs
---       | null zs   = Nothing
---       | otherwise =
---           let maxProb = maximum (map snd zs)
---           in  if maxProb < eps
---               then Nothing
---               else Just
---                    . S.fromList . map fst
---                    . filter ((>= maxProb - eps) . snd)
---                    $ zs
---     eps = 1.0e-9
 
-
-
-goodAndBad' :: P.Tagset -> [Sent w P.Tag] -> [Sent w P.Tag] -> (Int, Int)
-goodAndBad' tagset data1 data2 =
+goodAndBad'
+  :: Word w
+  => P.Tagset
+  -> AccSel
+  -> [Sent w P.Tag]
+  -> [Sent w P.Tag]
+  -> (Int, Int)
+goodAndBad' tagset sel data1 data2 =
     let add (g, b) (g', b') = (g + g', b + b')
     in  F.foldl' add (0, 0)
-        [ goodAndBad tagset dag1 dag2
+        [ goodAndBad tagset sel dag1 dag2
         | (dag1, dag2) <- zip data1 data2 ]
 
 
 -- | Compute the accuracy of the model with respect to the labeled dataset.
-accuracy :: P.Tagset -> [Sent w P.Tag] -> [Sent w P.Tag] -> Double
-accuracy tagset data1 data2 =
+accuracy :: Word w => P.Tagset -> AccSel -> [Sent w P.Tag] -> [Sent w P.Tag] -> Double
+accuracy tagset sel data1 data2 =
     let k = numCapabilities
         parts = partition k (zip data1 data2)
-        xs = Par.parMap Par.rseq (uncurry (goodAndBad' tagset) . unzip) parts
+        xs = Par.parMap Par.rseq (uncurry (goodAndBad' tagset sel) . unzip) parts
         (good, bad) = F.foldl' add (0, 0) xs
         add (g, b) (g', b') = (g + g', b + b')
     in  fromIntegral good / fromIntegral (good + bad)
