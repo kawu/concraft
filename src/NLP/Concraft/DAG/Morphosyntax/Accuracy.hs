@@ -1,3 +1,6 @@
+{-# LANGUAGE RecordWildCards #-}
+
+
 -- | Accuracy statistics.
 
 
@@ -6,6 +9,7 @@ module NLP.Concraft.DAG.Morphosyntax.Accuracy
 -- * Stats
   accuracy
 , AccSel (..)
+, AccCfg (..)
 ) where
 
 
@@ -24,8 +28,6 @@ import qualified Data.Tagset.Positional as P
 import qualified Data.DAG as DAG
 import           NLP.Concraft.DAG.Morphosyntax
 -- import           NLP.Concraft.DAG.Morphosyntax.Align
-
-
 
 
 -- -- | Add stats,
@@ -96,6 +98,16 @@ import           NLP.Concraft.DAG.Morphosyntax
 --     stats xs _ = Stats (length xs) (length xs)
 
 
+-- | Configuration of accuracy computation.
+data AccCfg = AccCfg
+  { accSel    :: AccSel
+    -- ^ Which segments should be taken into account
+  , accTagset :: P.Tagset
+    -- ^ The underlying tagset
+  , expandTag :: Bool
+  }
+
+
 -- | Accuracy selector.
 data AccSel
   = All
@@ -108,20 +120,19 @@ data AccSel
 
 goodAndBad
   :: Word w
-  => P.Tagset
-  -> AccSel
+  => AccCfg
   -> Sent w P.Tag
   -> Sent w P.Tag
   -> (Int, Int)
-goodAndBad tagset sel dag1 dag2 =
+goodAndBad cfg dag1 dag2 =
     F.foldl' gather (0, 0) $ DAG.zipE dag1 dag2
   where
     gather stats (seg1, seg2)
-      | sel == All || (sel == Oov && oov seg1) =
+      | accSel cfg == All || (accSel cfg == Oov && oov seg1) =
           gather0 stats (seg1, seg2)
       | otherwise = stats
     gather0 (good, bad) (seg1, seg2) =
-      if consistent (choice tagset seg1) (choice tagset seg2)
+      if consistent (choice cfg seg1) (choice cfg seg2)
       then (good + 1, bad)
       else (good, bad + 1)
     consistent xs ys
@@ -133,24 +144,23 @@ goodAndBad tagset sel dag1 dag2 =
 
 goodAndBad'
   :: Word w
-  => P.Tagset
-  -> AccSel
+  => AccCfg
   -> [Sent w P.Tag]
   -> [Sent w P.Tag]
   -> (Int, Int)
-goodAndBad' tagset sel data1 data2 =
+goodAndBad' cfg data1 data2 =
     let add (g, b) (g', b') = (g + g', b + b')
     in  F.foldl' add (0, 0)
-        [ goodAndBad tagset sel dag1 dag2
+        [ goodAndBad cfg dag1 dag2
         | (dag1, dag2) <- zip data1 data2 ]
 
 
 -- | Compute the accuracy of the model with respect to the labeled dataset.
-accuracy :: Word w => P.Tagset -> AccSel -> [Sent w P.Tag] -> [Sent w P.Tag] -> Double
-accuracy tagset sel data1 data2 =
+accuracy :: Word w => AccCfg -> [Sent w P.Tag] -> [Sent w P.Tag] -> Double
+accuracy cfg data1 data2 =
     let k = numCapabilities
         parts = partition k (zip data1 data2)
-        xs = Par.parMap Par.rseq (uncurry (goodAndBad' tagset sel) . unzip) parts
+        xs = Par.parMap Par.rseq (uncurry (goodAndBad' cfg) . unzip) parts
         (good, bad) = F.foldl' add (0, 0) xs
         add (g, b) (g', b') = (g + g', b + b')
     in  fromIntegral good / fromIntegral (good + bad)
@@ -162,8 +172,13 @@ accuracy tagset sel data1 data2 =
 
 
 -- | All tags are expanded here.
-choice :: P.Tagset -> Seg w P.Tag -> S.Set P.Tag
-choice tagset = S.fromList . concatMap (P.expand tagset) . best
+choice :: AccCfg -> Seg w P.Tag -> S.Set P.Tag
+choice AccCfg{..}
+  = S.fromList . expandMaybe . best
+  where
+    expandMaybe
+      | expandTag = concatMap (P.expand accTagset)
+      | otherwise = id
 
 
 -- -- | Positive tags.
