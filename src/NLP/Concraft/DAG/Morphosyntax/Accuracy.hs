@@ -105,6 +105,11 @@ data AccCfg = AccCfg
   , accTagset :: P.Tagset
     -- ^ The underlying tagset
   , expandTag :: Bool
+    -- ^ Should the tags be expanded?
+  , weakAcc :: Bool
+    -- ^ If weak, there has to be an overlap in the tags assigned to a given
+    -- segment in both datasets. Otherwise, the two sets of tags have to be
+    -- identical.
   }
 
 
@@ -137,9 +142,10 @@ goodAndBad cfg dag1 dag2 =
       else (good, bad + 1)
     consistent xs ys
       | S.null xs && S.null ys = True
-      | otherwise =
+      | weakAcc cfg =
           (not . S.null)
           (S.intersection xs ys)
+      | otherwise = xs == ys
 
 
 goodAndBad'
