@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE BangPatterns #-}
 
 
 -- | Accuracy statistics.
@@ -7,9 +8,12 @@
 module NLP.Concraft.DAG.Morphosyntax.Accuracy
 (
 -- * Stats
-  accuracy
+  Stats(..)
 , AccSel (..)
 , AccCfg (..)
+, collect
+, precision
+, recall
 ) where
 
 
@@ -28,6 +32,8 @@ import qualified Data.Tagset.Positional as P
 import qualified Data.DAG as DAG
 import           NLP.Concraft.DAG.Morphosyntax
 -- import           NLP.Concraft.DAG.Morphosyntax.Align
+
+import Debug.Trace (trace)
 
 
 -- -- | Add stats,
@@ -126,42 +132,69 @@ data AccSel
   deriving (Eq, Ord, Show)
 
 
+-- | True positives, false positives, etc.
+data Stats = Stats
+  { tp :: !Int
+  , fp :: !Int
+  , tn :: !Int
+  , fn :: !Int
+  } deriving (Show, Eq, Ord)
+
+
+-- | Initial statistics.
+zeroStats = Stats 0 0 0 0
+
+
+addStats :: Stats -> Stats -> Stats
+addStats x y = Stats
+  { tp = tp x + tp y
+  , fp = fp x + fp y
+  , tn = tn x + tn y
+  , fn = fn x + fn y
+  }
+
+
 goodAndBad
   :: Word w
   => AccCfg
   -> Sent w P.Tag
   -> Sent w P.Tag
-  -> (Int, Int)
+  -> Stats
 goodAndBad cfg dag1 dag2
-  | discardProb0 cfg && (dagProb dag1 < eps || dagProb dag2 < eps) = (0, 0)
+  | discardProb0 cfg && (dagProb dag1 < eps || dagProb dag2 < eps) = zeroStats
   | otherwise =
     -- By using `DAG.zipE'`, we allow the DAGs to be slighly different in terms
     -- of their edge sets.
-      F.foldl' gather (0, 0) $ DAG.zipE' dag1 dag2
+      F.foldl' gather zeroStats $ DAG.zipE' dag1 dag2
   where
     eps = 1e-9
-    gather stats (Just seg1, Just seg2)
-      | accSel cfg == All || (accSel cfg == Oov && oov seg1) =
-          gather0 stats (seg1, seg2)
+
+    gather stats (gold, tagg)
+      | accSel cfg == All || (accSel cfg == Oov && isOov) =
+          gather0 stats
+          (maybe S.empty (choice cfg) gold)
+          (maybe S.empty (choice cfg) tagg)
       | otherwise = stats
-    gather (good, bad) segPair
-      | accSel cfg == All || (accSel cfg == Oov && oov seg) =
-          (good, bad + 1)
-      | otherwise = (good, bad)
       where
-        seg = case segPair of
-          (Just seg, Nothing) -> seg
-          (Nothing, Just seg) -> seg
+        isOov = oov $ case (gold, tagg) of
+          (Just seg, _) -> seg
+          (_, Just seg) -> seg
           _ -> error "Accuracy.goodAndBad: impossible happened"
-    gather0 (good, bad) (seg1, seg2) =
-      if consistent (choice cfg seg1) (choice cfg seg2)
-      then (good + 1, bad)
-      else (good, bad + 1)
+
+    gather0 stats gold tagg
+      | S.null gold && S.null tagg =
+          stats {tn = tn stats + 1}
+      | S.null gold =
+          stats {fp = fp stats + 1}
+      | S.null tagg =
+          stats {fn = fn stats + 1}
+      | otherwise =
+          if consistent gold tagg
+          then stats {tp = tp stats + 1}
+          else stats {fp = fp stats + 1, fn = fn stats + 1}
+
     consistent xs ys
-      | S.null xs && S.null ys = True
-      | weakAcc cfg =
-          (not . S.null)
-          (S.intersection xs ys)
+      | weakAcc cfg = (not . S.null) (S.intersection xs ys)
       | otherwise = xs == ys
 
 
@@ -170,23 +203,33 @@ goodAndBad'
   => AccCfg
   -> [Sent w P.Tag]
   -> [Sent w P.Tag]
-  -> (Int, Int)
+  -> Stats
 goodAndBad' cfg data1 data2 =
-    let add (g, b) (g', b') = (g + g', b + b')
-    in  F.foldl' add (0, 0)
-        [ goodAndBad cfg dag1 dag2
-        | (dag1, dag2) <- zip data1 data2 ]
+  F.foldl' addStats zeroStats
+  [ goodAndBad cfg dag1 dag2
+  | (dag1, dag2) <- zip data1 data2 ]
 
 
 -- | Compute the accuracy of the model with respect to the labeled dataset.
-accuracy :: Word w => AccCfg -> [Sent w P.Tag] -> [Sent w P.Tag] -> Double
-accuracy cfg data1 data2 =
+collect :: Word w => AccCfg -> [Sent w P.Tag] -> [Sent w P.Tag] -> Stats
+collect cfg data1 data2 =
     let k = numCapabilities
         parts = partition k (zip data1 data2)
         xs = Par.parMap Par.rseq (uncurry (goodAndBad' cfg) . unzip) parts
-        (good, bad) = F.foldl' add (0, 0) xs
-        add (g, b) (g', b') = (g + g', b + b')
-    in  fromIntegral good / fromIntegral (good + bad)
+    in  F.foldl' addStats zeroStats xs
+    -- in  fromIntegral good / fromIntegral (good + bad)
+
+
+precision :: Stats -> Double
+precision Stats{..}
+  = fromIntegral tp
+  / fromIntegral (tp + fp)
+
+
+recall :: Stats -> Double
+recall Stats{..}
+  = fromIntegral tp
+  / fromIntegral (tp + fn)
 
 
 ------------------------------------------------------
