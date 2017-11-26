@@ -157,8 +157,8 @@ addStats x y = Stats
 goodAndBad
   :: Word w
   => AccCfg
-  -> Sent w P.Tag
-  -> Sent w P.Tag
+  -> Sent w P.Tag -- ^ Gold (reference) DAG
+  -> Sent w P.Tag -- ^ Tagged (to compare) DAG
   -> Stats
 goodAndBad cfg dag1 dag2
   | discardProb0 cfg && (dagProb dag1 < eps || dagProb dag2 < eps) = zeroStats
@@ -204,17 +204,22 @@ goodAndBad'
   -> [Sent w P.Tag]
   -> [Sent w P.Tag]
   -> Stats
-goodAndBad' cfg data1 data2 =
+goodAndBad' cfg goldData taggData =
   F.foldl' addStats zeroStats
   [ goodAndBad cfg dag1 dag2
-  | (dag1, dag2) <- zip data1 data2 ]
+  | (dag1, dag2) <- zip goldData taggData ]
 
 
 -- | Compute the accuracy of the model with respect to the labeled dataset.
-collect :: Word w => AccCfg -> [Sent w P.Tag] -> [Sent w P.Tag] -> Stats
-collect cfg data1 data2 =
+collect
+  :: Word w
+  => AccCfg
+  -> [Sent w P.Tag] -- ^ Gold dataset
+  -> [Sent w P.Tag] -- ^ Tagged dataset (to be compare with the gold)
+  -> Stats
+collect cfg goldData taggData =
     let k = numCapabilities
-        parts = partition k (zip data1 data2)
+        parts = partition k (zip goldData taggData)
         xs = Par.parMap Par.rseq (uncurry (goodAndBad' cfg) . unzip) parts
     in  F.foldl' addStats zeroStats xs
     -- in  fromIntegral good / fromIntegral (good + bad)
