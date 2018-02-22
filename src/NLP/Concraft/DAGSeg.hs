@@ -188,9 +188,33 @@ extract = fmap $ X.unWMap . X.tags
 ----------------------
 
 
+-- -- | Find all optimal paths in the given annotation. Optimal paths are those
+-- -- which go through tags with the assigned probability 1.
+-- findOptimalPaths :: Anno t Double -> [[(EdgeID, t)]]
+-- findOptimalPaths dag = do
+--   edgeID <- DAG.dagEdges dag
+--   guard $ DAG.isInitialEdge edgeID dag
+--   doit edgeID
+--   where
+--     doit i = inside i ++ final i
+--     inside i = do
+--       (tag, weight) <- M.toList (DAG.edgeLabel i dag)
+--       guard $ weight >= 1.0 - eps
+--       j <- DAG.nextEdges i dag
+--       xs <- doit j
+--       return $ (i, tag) : xs
+--     final i = do
+--       guard $ DAG.isFinalEdge i dag
+--       (tag, weight) <- M.toList (DAG.edgeLabel i dag)
+--       guard $ weight >= 1.0 - eps
+--       return [(i, tag)]
+--     eps = 1.0e-9
+
+
 -- | Find all optimal paths in the given annotation. Optimal paths are those
--- which go through tags with the assigned probability 1.
-findOptimalPaths :: Anno t Double -> [[(EdgeID, t)]]
+-- which go through tags with the assigned probability 1. For a given chosen
+-- edge, all the tags with probability 1 are selected.
+findOptimalPaths :: Ord t => Anno t Double -> [[(EdgeID, S.Set t)]]
 findOptimalPaths dag = do
   edgeID <- DAG.dagEdges dag
   guard $ DAG.isInitialEdge edgeID dag
@@ -198,30 +222,49 @@ findOptimalPaths dag = do
   where
     doit i = inside i ++ final i
     inside i = do
-      (tag, weight) <- M.toList (DAG.edgeLabel i dag)
-      guard $ weight >= 1.0 - eps
+      let tags =
+            [ tag
+            | (tag, weight) <- M.toList (DAG.edgeLabel i dag)
+            , weight >= 1.0 - eps ]
+      guard . not $ null tags
       j <- DAG.nextEdges i dag
       xs <- doit j
-      return $ (i, tag) : xs
+      return $ (i, S.fromList tags) : xs
     final i = do
       guard $ DAG.isFinalEdge i dag
-      (tag, weight) <- M.toList (DAG.edgeLabel i dag)
-      guard $ weight >= 1.0 - eps
-      return [(i, tag)]
+      let tags =
+            [ tag
+            | (tag, weight) <- M.toList (DAG.edgeLabel i dag)
+            , weight >= 1.0 - eps ]
+      guard . not $ null tags
+      return [(i, S.fromList tags)]
     eps = 1.0e-9
+
+
+-- -- | Make the given path with disamb markers in the given annotation
+-- -- and produce a new disamb annotation.
+-- disambPath :: (Ord t) => [(EdgeID, t)] -> Anno t Double -> Anno t Bool
+-- disambPath path =
+--   DAG.mapE doit
+--   where
+--     pathMap = M.fromList path
+--     doit edgeID m = M.fromList $ do
+--       let onPath = M.lookup edgeID pathMap
+--       x <- M.keys m
+--       return (x, Just x == onPath)
 
 
 -- | Make the given path with disamb markers in the given annotation
 -- and produce a new disamb annotation.
-disambPath :: (Ord t) => [(EdgeID, t)] -> Anno t Double -> Anno t Bool
+disambPath :: (Ord t) => [(EdgeID, S.Set t)] -> Anno t Double -> Anno t Bool
 disambPath path =
   DAG.mapE doit
   where
     pathMap = M.fromList path
     doit edgeID m = M.fromList $ do
-      let onPath = M.lookup edgeID pathMap
+      let onPath = maybe S.empty id $ M.lookup edgeID pathMap
       x <- M.keys m
-      return (x, Just x == onPath)
+      return (x, S.member x onPath)
 
 
 ----------------------
