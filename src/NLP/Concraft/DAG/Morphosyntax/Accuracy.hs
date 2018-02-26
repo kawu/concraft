@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 
 -- | Accuracy statistics.
@@ -9,7 +10,6 @@ module NLP.Concraft.DAG.Morphosyntax.Accuracy
 (
 -- * Stats
   Stats(..)
-, AccSel (..)
 , AccCfg (..)
 , collect
 , precision
@@ -20,98 +20,36 @@ module NLP.Concraft.DAG.Morphosyntax.Accuracy
 import           Prelude hiding (Word)
 import           GHC.Conc (numCapabilities)
 
-import qualified Control.Parallel as Par
 import qualified Control.Parallel.Strategies as Par
+import qualified Data.MemoCombinators as Memo
 
-import           Data.List (foldl', transpose)
+import           Data.List (transpose)
 import qualified Data.Foldable as F
 import qualified Data.Set as S
-import qualified Data.Map as M
+import qualified Data.Map.Strict as M
 import qualified Data.Tagset.Positional as P
 
 import qualified Data.DAG as DAG
 import           NLP.Concraft.DAG.Morphosyntax
 -- import           NLP.Concraft.DAG.Morphosyntax.Align
 
+import qualified Data.Text as T
 import Debug.Trace (trace)
-
-
--- -- | Add stats,
--- (.+.) :: Stats -> Stats -> Stats
--- Stats x y .+. Stats x' y' = Stats (x + x') (y + y')
---
---
--- -- | Accuracy given stats.
--- accuracy :: Stats -> Double
--- accuracy s
---     = fromIntegral (good s)
---     / fromIntegral (gold s)
-
-
--- -- | Accuracy weak lower bound.
--- weakLB :: Word w => P.Tagset -> [Seg w P.Tag] -> [Seg w P.Tag] -> Stats
--- weakLB tagset ref other =
---     foldl' (.+.) (Stats 0 0) . map (uncurry stats) $ align ref other
---   where
---     stats [x] [y]
---         | S.null (xTags `S.intersection` yTags) = Stats 0 1
---         | otherwise = Stats 1 1
---       where
---         xTags = choice tagset x
---         yTags = choice tagset y
---     stats xs _ = Stats 0 (length xs)
---
---
--- -- | Accuracy strong lower bound.
--- strongLB :: Word w => P.Tagset -> [Seg w P.Tag] -> [Seg w P.Tag] -> Stats
--- strongLB tagset ref other =
---     foldl' (.+.) (Stats 0 0) . map (uncurry stats) $ align ref other
---   where
---     stats [x] [y]
---         | xTags == yTags = Stats 1 1
---         | otherwise = Stats 0 1
---       where
---         xTags = choice tagset x
---         yTags = choice tagset y
---     stats xs _ = Stats 0 (length xs)
---
---
--- -- | Accuracy weak upper bound.
--- weakUB :: Word w => P.Tagset -> [Seg w P.Tag] -> [Seg w P.Tag] -> Stats
--- weakUB tagset ref other =
---     foldl' (.+.) (Stats 0 0) . map (uncurry stats) $ align ref other
---   where
---     stats [x] [y]
---         | S.null (xTags `S.intersection` yTags) = Stats 0 1
---         | otherwise = Stats 1 1
---       where
---         xTags = choice tagset x
---         yTags = choice tagset y
---     stats xs _ = Stats (length xs) (length xs)
---
---
--- -- | Accuracy strong upper bound.
--- strongUB :: Word w => P.Tagset -> [Seg w P.Tag] -> [Seg w P.Tag] -> Stats
--- strongUB tagset ref other =
---     foldl' (.+.) (Stats 0 0) . map (uncurry stats) $ align ref other
---   where
---     stats [x] [y]
---         | xTags == yTags = Stats 1 1
---         | otherwise = Stats 0 1
---       where
---         xTags = choice tagset x
---         yTags = choice tagset y
---     stats xs _ = Stats (length xs) (length xs)
 
 
 -- | Configuration of accuracy computation.
 data AccCfg = AccCfg
-  { accSel    :: AccSel
-    -- ^ Which segments should be taken into account
+  { onlyOov   :: Bool
+    -- ^ Limit calculations to OOV words
+  , onlyAmb   :: Bool
+    -- ^ Limit calculations to segmentation-ambiguous words
   , accTagset :: P.Tagset
     -- ^ The underlying tagset
   , expandTag :: Bool
     -- ^ Should the tags be expanded?
+  , ignoreTag :: Bool
+    -- ^ Compute segmentation-level accurracy. The actually chosen tags are
+    -- ignored, only information about the chosen DAG edges is relevant.
   , weakAcc :: Bool
     -- ^ If weak, there has to be an overlap in the tags assigned to a given
     -- segment in both datasets. Otherwise, the two sets of tags have to be
@@ -120,16 +58,6 @@ data AccCfg = AccCfg
     -- ^ Whether sentences with near 0 probability should be discarded from
     -- evaluation.
   }
-
-
--- | Accuracy selector.
-data AccSel
-  = All
-    -- ^ All words
-  | Oov
-    -- ^ Only OOV words
-  -- -- | NotOov
-  deriving (Eq, Ord, Show)
 
 
 -- | True positives, false positives, etc.
@@ -142,6 +70,7 @@ data Stats = Stats
 
 
 -- | Initial statistics.
+zeroStats :: Stats
 zeroStats = Stats 0 0 0 0
 
 
@@ -165,33 +94,41 @@ goodAndBad cfg dag1 dag2
   | otherwise =
     -- By using `DAG.zipE'`, we allow the DAGs to be slighly different in terms
     -- of their edge sets.
-      F.foldl' gather zeroStats $ DAG.zipE' dag1 dag2
+      F.foldl' addStats zeroStats
+      . DAG.mapE gather
+      $ dag
   where
     eps = 1e-9
 
-    gather stats (gold, tagg)
-      | accSel cfg == All || (accSel cfg == Oov && isOov) =
-          gather0 stats
+    dag = DAG.zipE' dag1 dag2
+    ambiDag = identifyAmbiguousSegments dag
+
+    gather edgeID (gold, tagg)
+      | (onlyOov cfg `implies` isOov) &&
+        (onlyAmb cfg `implies` isAmb) =
+          trace ("comparing '" ++ show (orth <$> gold) ++ "' with '" ++ show (orth <$> tagg) ++ "'") $
+          gather0
           (maybe S.empty (choice cfg) gold)
           (maybe S.empty (choice cfg) tagg)
-      | otherwise = stats
+      | otherwise = zeroStats
       where
         isOov = oov $ case (gold, tagg) of
           (Just seg, _) -> seg
           (_, Just seg) -> seg
           _ -> error "Accuracy.goodAndBad: impossible happened"
+        isAmb = DAG.edgeLabel edgeID ambiDag
 
-    gather0 stats gold tagg
+    gather0 gold tagg
       | S.null gold && S.null tagg =
-          stats {tn = tn stats + 1}
+          zeroStats {tn = 1}
       | S.null gold =
-          stats {fp = fp stats + 1}
+          zeroStats {fp = 1}
       | S.null tagg =
-          stats {fn = fn stats + 1}
+          zeroStats {fn = 0 + 1}
       | otherwise =
           if consistent gold tagg
-          then stats {tp = tp stats + 1}
-          else stats {fp = fp stats + 1, fn = fn stats + 1}
+          then zeroStats {tp = 1}
+          else zeroStats {fp = 1, fn = 1}
 
     consistent xs ys
       | weakAcc cfg = (not . S.null) (S.intersection xs ys)
@@ -238,6 +175,56 @@ recall Stats{..}
 
 
 ------------------------------------------------------
+-- Marking segmantation ambiguities
+------------------------------------------------------
+
+
+-- | Identify ambigouos segments (roughly, segments which can be by-passed) in
+-- the given DAG. Such ambiguous edges are marked in the resulting DAG with
+-- `True` values.
+identifyAmbiguousSegments :: DAG.DAG a b -> DAG.DAG a Bool
+identifyAmbiguousSegments dag =
+  flip DAG.mapE dag $ \edgeID _ ->
+    -- incoming edgeID * outgoing edgeID < totalPathNum
+    False
+  where
+    incoming = inComingNum dag
+    outgoing = outGoingNum dag
+    totalPathNum = sum
+      [ outgoing edgeID
+      | edgeID <- DAG.dagEdges dag
+      , DAG.isInitialEdge edgeID dag ]
+
+
+-- | Compute the number of paths from a starting edge to the given edge.
+inComingNum :: DAG.DAG a b -> DAG.EdgeID -> Int
+inComingNum dag =
+  incoming
+  where
+    incoming =
+      Memo.wrap DAG.EdgeID DAG.unEdgeID Memo.integral incoming'
+    incoming' edgeID
+      | DAG.isInitialEdge edgeID dag = 1
+      | otherwise = sum $ do
+          prevID <- DAG.prevEdges edgeID dag
+          return $ incoming prevID
+
+
+-- | Compute the number of paths from the given edge to a target edge.
+outGoingNum :: DAG.DAG a b -> DAG.EdgeID -> Int
+outGoingNum dag =
+  outgoing
+  where
+    outgoing =
+      Memo.wrap DAG.EdgeID DAG.unEdgeID Memo.integral outgoing'
+    outgoing' edgeID
+      | DAG.isFinalEdge edgeID dag = 1
+      | otherwise = sum $ do
+          nextID <- DAG.nextEdges edgeID dag
+          return $ outgoing nextID
+
+
+------------------------------------------------------
 -- Verification
 ------------------------------------------------------
 
@@ -276,14 +263,19 @@ dagProb dag = sum
 --------------------------
 
 
--- | All tags are expanded here.
+-- | Select the chosen tags.
+--
+--   * Tag expansion is performed here (if demanded)
+--   * Tags are replaced by a dummy in case of `AmbiSeg` comparison
 choice :: AccCfg -> Seg w P.Tag -> S.Set P.Tag
 choice AccCfg{..}
   = S.fromList . expandMaybe . best
   where
     expandMaybe
+      | ignoreTag = map (const dummyTag)
       | expandTag = concatMap (P.expand accTagset)
       | otherwise = id
+    dummyTag = P.Tag "AmbiSeg" M.empty
 
 
 -- -- | Positive tags.
@@ -315,3 +307,8 @@ partition n =
   where
     group _ [] = []
     group k xs = take k xs : (group k $ drop k xs)
+
+
+-- | Implication.
+implies :: Bool -> Bool -> Bool
+implies p q = if p then q else True

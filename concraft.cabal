@@ -47,7 +47,8 @@ library
       , cmdargs                 >= 0.10     && < 0.11
       , pedestrian-dag          >= 0.2      && < 0.3
       , temporary               >= 1.1      && < 1.3
-      , parallel                >= 3.2          && < 3.3
+      , parallel                >= 3.2      && < 3.3
+      , data-memocombinators    >= 0.5.1    && < 0.6
 
     exposed-modules:
         NLP.Concraft
