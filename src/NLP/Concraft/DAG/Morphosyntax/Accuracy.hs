@@ -185,8 +185,7 @@ recall Stats{..}
 identifyAmbiguousSegments :: DAG.DAG a b -> DAG.DAG a Bool
 identifyAmbiguousSegments dag =
   flip DAG.mapE dag $ \edgeID _ ->
-    -- incoming edgeID * outgoing edgeID < totalPathNum
-    False
+    incoming edgeID * outgoing edgeID < totalPathNum
   where
     incoming = inComingNum dag
     outgoing = outGoingNum dag
