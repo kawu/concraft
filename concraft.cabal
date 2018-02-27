@@ -62,6 +62,7 @@ library
 
       , NLP.Concraft.DAG.Morphosyntax
       , NLP.Concraft.DAG.Morphosyntax.Accuracy
+      , NLP.Concraft.DAG.Morphosyntax.Ambiguous
       , NLP.Concraft.DAG.Schema
       , NLP.Concraft.DAG.Guess
       , NLP.Concraft.DAG.Disamb
