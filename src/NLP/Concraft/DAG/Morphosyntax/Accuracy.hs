@@ -132,7 +132,7 @@ goodAndBad cfg dag1 dag2
       | S.null gold =
           zeroStats {fp = 1}
       | S.null tagg =
-          zeroStats {fn = 0 + 1}
+          zeroStats {fn = 1}
       | otherwise =
           if consistent gold tagg
           then zeroStats {tp = 1}
