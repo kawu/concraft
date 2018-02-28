@@ -107,7 +107,14 @@ goodAndBad cfg dag1 dag2
     gather edgeID (gold, tagg)
       | (onlyOov cfg `implies` isOov) &&
         (onlyAmb cfg `implies` isAmb) =
-          trace ("comparing '" ++ show (orth <$> gold) ++ "' with '" ++ show (orth <$> tagg) ++ "'") $
+          trace
+            ( let info = (,) <$> orth <*> choice cfg in
+              "comparing '" ++
+              show (info <$> gold) ++
+              "' with '" ++
+              show (info <$> tagg) ++
+              "'"
+            ) $
           gather0
           (maybe S.empty (choice cfg) gold)
           (maybe S.empty (choice cfg) tagg)
