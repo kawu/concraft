@@ -50,7 +50,7 @@ findShortestPath dag
       | otherwise = pick $ do
           nextEdgeID <- DAG.outgoingEdges nodeID dag
           let nextNodeID = DAG.endsWith nextEdgeID dag
-          guard $ dist nodeID == dist nextNodeID - 1
+          guard $ dist nodeID == dist nextNodeID + 1
           return nextNodeID
     dist = computeDist dag
 
