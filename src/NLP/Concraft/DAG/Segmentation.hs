@@ -5,7 +5,8 @@
 
 
 module NLP.Concraft.DAG.Segmentation
-( shortestPath
+( PathTyp (..)
+, pickPath
 ) where
 
 
@@ -22,32 +23,45 @@ import qualified Data.DAG as DAG
 
 
 ------------------------------------
--- Baseline word-level segmentation
+-- Shortest-path segmentation
 ------------------------------------
+
+
+-- | Which path type to search: shortest (`Min`) or longest (`Max`)
+data PathTyp = Min | Max
+  deriving (Show, Eq, Ord)
 
 
 -- | Select the shortest-path in the given DAG and remove all the edges which
 -- are not on this path.
-shortestPath :: DAG a b -> DAG a b
-shortestPath dag =
+pickPath :: PathTyp -> DAG a b -> DAG a b
+pickPath pathTyp dag =
   let
-    dag' = DAG.filterDAG (findShortestPath dag) dag
+    dag' = DAG.filterDAG (findPath pathTyp dag) dag
   in
     if DAG.isOK dag'
     then dag'
-    else error "Segmentation.shortestPath: the resulting DAG not correct"
+    else error "Segmentation.pickPath: the resulting DAG not correct"
 
 
--- | Retrieve the nodes which belong to the shortest path in the given DAG.
-findShortestPath :: DAG a b -> S.Set DAG.NodeID
-findShortestPath dag
-  = S.fromList . pick . map fst . reverse
-  $ L.sortBy (comparing snd) first
+-- | Retrieve the nodes which belong to the shortest/longest (depending on the
+-- argument function: `minimum` or `maximum`) path in the given DAG.
+findPath :: PathTyp -> DAG a b -> S.Set DAG.NodeID
+findPath pathTyp dag
+  = S.fromList . pick . map fst
+  -- Below, we take the node with the smallest (reverse) or highest (no reverse)
+  -- distance to a target node, depending on the path type (`Min` or `Max`).
+  . reverseOrNot
+  . L.sortBy (comparing snd)
+  $ sourceNodes
   where
-    first = do
+    sourceNodes = do
       nodeID <- DAG.dagNodes dag
       guard . null $ DAG.ingoingEdges nodeID dag
       return (nodeID, dist nodeID)
+    reverseOrNot = case pathTyp of
+      Min -> id
+      Max -> reverse
     pick ids = case ids of
       nodeID : _ -> nodeID : forward nodeID
       [] -> error "Segmentation.findShortestPath: nothing to pick!?"
@@ -58,19 +72,28 @@ findShortestPath dag
           let nextNodeID = DAG.endsWith nextEdgeID dag
           guard $ dist nodeID == dist nextNodeID + 1
           return nextNodeID
-    dist = computeDist dag
+    dist = computeDist pathTyp dag
 
 
--- | Compute the minimal distance from each node to a target node.
-computeDist :: DAG a b -> DAG.NodeID -> Int
-computeDist dag =
+------------------------------------
+-- Distance from target nodes
+------------------------------------
+
+
+-- | Compute the minimal/maximal distance (depending on the argument function)
+-- from each node to a target node.
+computeDist :: PathTyp -> DAG a b -> DAG.NodeID -> Int
+computeDist pathTyp dag =
   dist
   where
+    minMax = case pathTyp of
+      Min -> minimum
+      Max -> maximum
     dist =
       Memo.wrap DAG.NodeID DAG.unNodeID Memo.integral dist'
     dist' nodeID
       | null (DAG.outgoingEdges nodeID dag) = 0
-      | otherwise = minimum $ do
+      | otherwise = minMax $ do
           nextEdgeID <- DAG.outgoingEdges nodeID dag
           let nextNodeID = DAG.endsWith nextEdgeID dag
           return $ dist nextNodeID + 1
