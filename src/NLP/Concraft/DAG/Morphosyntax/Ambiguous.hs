@@ -3,7 +3,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 
--- | Segmentation-level ambiguities.
+-- | Segmentation-level ambiguities. TODO: consider moving the module contents
+-- to `NLP.Concraft.DAG`.
 
 
 module NLP.Concraft.DAG.Morphosyntax.Ambiguous

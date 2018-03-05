@@ -347,12 +347,6 @@ tag :: (X.Word w, Ord t) => Int -> Concraft t -> Sent w t -> Anno t Double
 tag k crf = disambMarginals (disamb crf) . guessSent k (guesser crf)
 
 
--- -- | Perform guessing, trimming, and finally determine probabilities
--- -- corresponding to individual tags w.r.t. the disambiguation model.
--- tag' :: X.Word w => Int -> D.ProbType -> Concraft -> Sent w P.Tag -> Anno P.Tag Double
--- tag' k typ Concraft{..} = disambProbs typ disamb . guessSent k guesser
-
-
 ---------------------
 -- Training
 ---------------------
