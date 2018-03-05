@@ -29,7 +29,13 @@ import qualified Data.DAG as DAG
 -- | Select the shortest-path in the given DAG and remove all the edges which
 -- are not on this path.
 shortestPath :: DAG a b -> DAG a b
-shortestPath dag = filterDAG (findShortestPath dag) dag
+shortestPath dag =
+  let
+    dag' = DAG.filterDAG (findShortestPath dag) dag
+  in
+    if DAG.isOK dag'
+    then dag'
+    else error "Segmentation.shortestPath: the resulting DAG not correct"
 
 
 -- | Retrieve the nodes which belong to the shortest path in the given DAG.
@@ -68,19 +74,3 @@ computeDist dag =
           nextEdgeID <- DAG.outgoingEdges nodeID dag
           let nextNodeID = DAG.endsWith nextEdgeID dag
           return $ dist nextNodeID + 1
-
-
--- | Remove the nodes (and the corresponding edges) which are not in the given set.
-filterDAG :: S.Set DAG.NodeID -> DAG a b -> DAG a b
-filterDAG nodeSet DAG.DAG{..} =
-  DAG.DAG newNodeMap newEdgeMap
-  where
-    newNodeMap = M.fromList
-      [ (nodeID, node)
-      | (nodeID, node) <- M.toList nodeMap
-      , nodeID `S.member` nodeSet ]
-    newEdgeMap = M.fromList
-      [ (edgeID, edge)
-      | (edgeID, edge) <- M.toList edgeMap
-      , DAG.tailNode edge `S.member` nodeSet
-      , DAG.headNode edge `S.member` nodeSet ]
