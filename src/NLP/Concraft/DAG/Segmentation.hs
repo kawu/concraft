@@ -44,11 +44,11 @@ pickPath pathTyp dag =
     else error "Segmentation.pickPath: the resulting DAG not correct"
 
 
--- | Retrieve the nodes which belong to the shortest/longest (depending on the
+-- | Retrieve the edges which belong to the shortest/longest (depending on the
 -- argument function: `minimum` or `maximum`) path in the given DAG.
-findPath :: PathTyp -> DAG a b -> S.Set DAG.NodeID
+findPath :: PathTyp -> DAG a b -> S.Set DAG.EdgeID
 findPath pathTyp dag
-  = S.fromList . pick . map fst
+  = S.fromList . pickNode . map fst
   -- Below, we take the node with the smallest (reverse) or highest (no reverse)
   -- distance to a target node, depending on the path type (`Min` or `Max`).
   . reverseOrNot
@@ -62,16 +62,20 @@ findPath pathTyp dag
     reverseOrNot = case pathTyp of
       Min -> id
       Max -> reverse
-    pick ids = case ids of
-      nodeID : _ -> nodeID : forward nodeID
-      [] -> error "Segmentation.findShortestPath: nothing to pick!?"
     forward nodeID
       | null (DAG.outgoingEdges nodeID dag) = []
       | otherwise = pick $ do
           nextEdgeID <- DAG.outgoingEdges nodeID dag
           let nextNodeID = DAG.endsWith nextEdgeID dag
           guard $ dist nodeID == dist nextNodeID + 1
-          return nextNodeID
+          -- return nextNodeID
+          return nextEdgeID
+    pickNode ids = case ids of
+      nodeID : _ -> forward nodeID
+      [] -> error "Segmentation.pickPath: no node to pick!?"
+    pick ids = case ids of
+      edgeID : _ -> edgeID : forward (DAG.endsWith edgeID dag)
+      [] -> error "Segmentation.pickPath: nothing to pick!?"
     dist = computeDist pathTyp dag
 
 
