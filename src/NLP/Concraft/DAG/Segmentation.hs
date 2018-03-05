@@ -67,7 +67,7 @@ computeDist dag =
       | otherwise = minimum $ do
           nextEdgeID <- DAG.outgoingEdges nodeID dag
           let nextNodeID = DAG.endsWith nextEdgeID dag
-          return $ dist nextNodeID
+          return $ dist nextNodeID + 1
 
 
 -- | Remove the nodes (and the corresponding edges) which are not in the given set.
