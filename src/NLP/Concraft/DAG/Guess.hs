@@ -23,6 +23,9 @@ module NLP.Concraft.DAG.Guess
 , TrainConf (..)
 , R0T (..)
 , train
+
+-- * Utils
+, schemed
 ) where
 
 

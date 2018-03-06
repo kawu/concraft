@@ -54,12 +54,11 @@ import           NLP.Concraft.Morphosyntax.WMap
 
 -- | A segment parametrized over a word type and a tag type.
 data Seg w t = Seg {
-    -- | A word represented by the segment.  Typically it will be
-    -- an instance of the `Word` class.
+    -- | A word represented by the segment. Typically it will be an instance of
+    -- the `Word` class.
       word  :: w
-    -- | A set of interpretations.  To each interpretation
-    -- a weight of appropriateness within the context
-    -- is assigned.
+    -- | A set of interpretations. To each interpretation a weight of
+    -- appropriateness within the context is assigned.
     , tags  :: WMap t }
     deriving (Show)
 

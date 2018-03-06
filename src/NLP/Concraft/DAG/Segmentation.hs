@@ -7,6 +7,7 @@
 module NLP.Concraft.DAG.Segmentation
 ( PathTyp (..)
 , pickPath
+, findPath
 ) where
 
 
