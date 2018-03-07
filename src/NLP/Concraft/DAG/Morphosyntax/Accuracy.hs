@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 
 
 -- | Accuracy statistics.
@@ -20,6 +21,7 @@ module NLP.Concraft.DAG.Morphosyntax.Accuracy
 import           Prelude hiding (Word)
 import           GHC.Conc (numCapabilities)
 
+import           Control.Arrow (first)
 import qualified Control.Parallel.Strategies as Par
 
 import           Data.List (transpose)
@@ -34,16 +36,19 @@ import           NLP.Concraft.DAG.Morphosyntax.Ambiguous
   (identifyAmbiguousSegments)
 -- import           NLP.Concraft.DAG.Morphosyntax.Align
 
-import qualified Data.Text as T
+-- import qualified Data.Text as T
 import Debug.Trace (trace)
 
 
 -- | Configuration of accuracy computation.
-data AccCfg = AccCfg
+data AccCfg x = AccCfg
   { onlyOov   :: Bool
     -- ^ Limit calculations to OOV words
   , onlyAmb   :: Bool
     -- ^ Limit calculations to segmentation-ambiguous words
+  , onlyMarkedWith :: S.Set x
+    -- ^ Limit calculations to segments marked with one of the given labels;
+    -- if empty, the option has no effect
   , accTagset :: P.Tagset
     -- ^ The underlying tagset
   , expandTag :: Bool
@@ -85,10 +90,10 @@ addStats x y = Stats
 
 
 goodAndBad
-  :: Word w
-  => AccCfg
-  -> Sent w P.Tag -- ^ Gold (reference) DAG
-  -> Sent w P.Tag -- ^ Tagged (to compare) DAG
+  :: (Word w, Ord x, Show x)
+  => AccCfg x
+  -> Sent w (P.Tag, x) -- ^ Gold (reference) DAG
+  -> Sent w (P.Tag, x) -- ^ Tagged (to compare) DAG
   -> Stats
 goodAndBad cfg dag1 dag2
   | discardProb0 cfg && (dagProb dag1 < eps || dagProb dag2 < eps) = zeroStats
@@ -106,7 +111,8 @@ goodAndBad cfg dag1 dag2
 
     gather edgeID (gold, tagg)
       | (onlyOov cfg `implies` isOov) &&
-        (onlyAmb cfg `implies` isAmb) =
+        (onlyAmb cfg `implies` isAmb) &&
+        ((not . S.null) (onlyMarkedWith cfg) `implies` isMarked) =
           trace
             ( let info = (,) <$> orth <*> choice cfg in
               "comparing '" ++
@@ -124,6 +130,14 @@ goodAndBad cfg dag1 dag2
           (Just seg, _) -> seg
           (_, Just seg) -> seg
           _ -> error "Accuracy.goodAndBad: impossible happened"
+        hasMarker =
+          any (`S.member` onlyMarkedWith cfg) . map (snd . fst) . M.toList
+        isMarked = hasMarker $ case (gold, tagg) of
+          (Just seg1, Just seg2) ->
+            unWMap (tags seg1) `M.union` unWMap (tags seg2)
+          (Just seg, _) -> unWMap $ tags seg
+          (_, Just seg) -> unWMap $ tags seg
+          _ -> error "Accuracy.goodAndBad: impossible2 happened"
         isAmb = DAG.edgeLabel edgeID ambiDag
 
     gather0 gold tagg
@@ -144,10 +158,10 @@ goodAndBad cfg dag1 dag2
 
 
 goodAndBad'
-  :: Word w
-  => AccCfg
-  -> [Sent w P.Tag]
-  -> [Sent w P.Tag]
+  :: (Word w, Ord x, Show x)
+  => AccCfg x
+  -> [Sent w (P.Tag, x)]
+  -> [Sent w (P.Tag, x)]
   -> Stats
 goodAndBad' cfg goldData taggData =
   F.foldl' addStats zeroStats
@@ -156,11 +170,13 @@ goodAndBad' cfg goldData taggData =
 
 
 -- | Compute the accuracy of the model with respect to the labeled dataset.
+-- To each `P.Tag` an additional information `x` can be assigned, which will be
+-- taken into account when computing statistics.
 collect
-  :: Word w
-  => AccCfg
-  -> [Sent w P.Tag] -- ^ Gold dataset
-  -> [Sent w P.Tag] -- ^ Tagged dataset (to be compare with the gold)
+  :: (Word w, Ord x, Show x)
+  => AccCfg x
+  -> [Sent w (P.Tag, x)] -- ^ Gold dataset
+  -> [Sent w (P.Tag, x)] -- ^ Tagged dataset (to be compare with the gold)
   -> Stats
 collect cfg goldData taggData =
     let k = numCapabilities
@@ -225,22 +241,15 @@ dagProb dag = sum
 --
 --   * Tag expansion is performed here (if demanded)
 --   * Tags are replaced by a dummy in case of `AmbiSeg` comparison
-choice :: AccCfg -> Seg w P.Tag -> S.Set P.Tag
+choice :: (Ord x) => AccCfg x -> Seg w (P.Tag, x) -> S.Set (P.Tag, x)
 choice AccCfg{..}
   = S.fromList . expandMaybe . best
   where
     expandMaybe
-      | ignoreTag = map (const dummyTag)
-      | expandTag = concatMap (P.expand accTagset)
+      | ignoreTag = map (first $ const dummyTag)
+      | expandTag = concatMap (\(tag, x) -> map (,x) $ P.expand accTagset tag)
       | otherwise = id
     dummyTag = P.Tag "AmbiSeg" M.empty
-
-
--- -- | Positive tags.
--- positive :: Seg w t -> [t]
--- positive seg =
---     let xs = M.toList . unWMap . tags
---     in  [x | (x, v) <- xs seg, v > 0]
 
 
 -- | The best tags.
