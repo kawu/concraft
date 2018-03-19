@@ -290,6 +290,8 @@ data TrainConf t s = TrainConf
     -- | Strip the label from irrelevant information.  Used to determine othe set of
     -- possible tags for unknown words.
     , stripLabel :: t -> t
+    -- | Guess only visible features
+    , onlyVisible :: Bool
     }
 
 
@@ -306,13 +308,18 @@ train TrainConf{..} trainData evalData = do
         AnyInterps  -> CRF.anyInterps
         AnyChosen   -> CRF.anyChosen
         OovChosen   -> CRF.oovChosen
+      featExtract =
+        if onlyVisible
+        then const CRF.presentFeats
+        else \r0 -> CRF.hiddenFeats r0 . map (fmap fst)
   tagSet <- S.unions . map (tagSetIn stripLabel) <$> trainData
 --   let tagMap = M.fromList
 --         [ (t, simplifyLabel t)
 --         | t <- S.toList tagSet ]
   crf <- CRF.train sgdArgsT onDiskT
     -- mkR0 (const CRF.presentFeats)
-    mkR0 (\r0 -> CRF.hiddenFeats r0 . map (fmap fst))
+    -- mkR0 (\r0 -> CRF.hiddenFeats r0 . map (fmap fst))
+    mkR0 featExtract
     (schemed simplifyLabel schema <$> trainData)
     (schemed simplifyLabel schema <$> evalData)
   return $ Guesser schemaConfT crf (simplifyLabel zeroProbLabel) tagSet simplifyLabel
