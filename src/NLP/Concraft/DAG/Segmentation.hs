@@ -44,8 +44,8 @@ data FreqConf = FreqConf
   , smoothingParam :: Double
     -- ^ A naive smoothing related parameter, which should be adddd to each
     -- count in `pickFreqMap`.
-  , orth :: DAG.EdgeID -> T.Text
-    -- ^ Orthographic form of a given edge
+--   , orth :: DAG.EdgeID -> T.Text
+--     -- ^ Orthographic form of a given edge
   }
 
 
@@ -59,7 +59,8 @@ data PathTyp
 -- | Select the shortest-path (or longest, depending on `PathTyp`) in the given
 -- DAG and remove all the edges which are not on this path.
 pickPath
-  :: PathTyp
+  :: (X.Word b)
+  => PathTyp
   -> DAG a b
   -> DAG a b
 pickPath pathTyp dag =
@@ -74,7 +75,8 @@ pickPath pathTyp dag =
 -- | Retrieve the edges which belong to the shortest/longest (depending on the
 -- argument function: `minimum` or `maximum`) path in the given DAG.
 findPath
-  :: PathTyp
+  :: (X.Word b)
+  => PathTyp
   -> DAG a b
   -> S.Set DAG.EdgeID
 findPath pathTyp dag
@@ -111,7 +113,7 @@ findPath pathTyp dag
     -- distance between two nodes connected by an arc
     arcLen =
       case pathTyp of
-        Freq conf -> computeArcLen conf
+        Freq conf -> computeArcLen conf dag
         _ -> const 1
 
 
@@ -123,7 +125,8 @@ findPath pathTyp dag
 -- | Compute the minimal/maximal distance (depending on the argument function)
 -- from each node to a target node.
 computeDist
-  :: PathTyp
+  :: (X.Word b)
+  => PathTyp
   -> DAG a b
   -> DAG.NodeID
   -> Double
@@ -144,7 +147,7 @@ computeDist pathTyp dag =
           return $ dist nextNodeID + arcLen nextEdgeID
     arcLen =
       case pathTyp of
-        Freq conf -> computeArcLen conf
+        Freq conf -> computeArcLen conf dag
         _ -> const 1
 
 
@@ -162,7 +165,7 @@ computeFreqs dags = M.fromListWith addBoth $ do
   edgeID <- DAG.dagEdges dag
   guard $ DAG.edgeLabel edgeID ambiDAG == True
   let seg = DAG.edgeLabel edgeID dag
-      orth = X.orth $ X.word seg
+      orth = edgeOrth seg
       edgeWeight = sum . M.elems . X.unWMap . X.tags $ seg
       eps = 1e-9
   return $
@@ -173,14 +176,25 @@ computeFreqs dags = M.fromListWith addBoth $ do
     addBoth (x1, y1) (x2, y2) = (x1 + x2, y1 + y2)
 
 
-computeArcLen :: FreqConf -> DAG.EdgeID -> Double
-computeArcLen FreqConf{..} edgeID =
+computeArcLen
+  :: (X.Word b)
+  => FreqConf
+  -> DAG a b
+  -> DAG.EdgeID
+  -> Double
+computeArcLen FreqConf{..} dag edgeID =
   (\x -> -x) . log $
-    case M.lookup (orth edgeID) pickFreqMap of
+    case M.lookup (edgeOrth $ DAG.edgeLabel edgeID dag) pickFreqMap of
       Just (chosen, notChosen) ->
         (fromIntegral chosen + smoothingParam) /
         (fromIntegral (chosen + notChosen) + smoothingParam*2)
       Nothing -> 0.5 -- smoothingParam / (smoothingParam*2)
+
+
+-- | Retrieve the orthographic representation of a given segment for the purpose
+-- of frequency-based segmentation.
+edgeOrth :: X.Word w => w -> T.Text
+edgeOrth = T.toLower . T.strip . X.orth
 
 
 ------------------------------------
