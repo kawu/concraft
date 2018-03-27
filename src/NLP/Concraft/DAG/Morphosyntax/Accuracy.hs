@@ -15,6 +15,7 @@ module NLP.Concraft.DAG.Morphosyntax.Accuracy
 , collect
 , precision
 , recall
+, accuracy
 ) where
 
 
@@ -69,15 +70,21 @@ data AccCfg x = AccCfg
 -- | True positives, false positives, etc.
 data Stats = Stats
   { tp :: !Int
+    -- ^ True positive
   , fp :: !Int
+    -- ^ False positive
   , tn :: !Int
+    -- ^ True negative
   , fn :: !Int
+    -- ^ False negative
+  , ce :: !Int
+    -- ^ Consistency error (number of edges for which both `fp` and `fn` hold)
   } deriving (Show, Eq, Ord)
 
 
 -- | Initial statistics.
 zeroStats :: Stats
-zeroStats = Stats 0 0 0 0
+zeroStats = Stats 0 0 0 0 0
 
 
 addStats :: Stats -> Stats -> Stats
@@ -86,6 +93,7 @@ addStats x y = Stats
   , fp = fp x + fp y
   , tn = tn x + tn y
   , fn = fn x + fn y
+  , ce = ce x + ce y
   }
 
 
@@ -150,7 +158,7 @@ goodAndBad cfg dag1 dag2
       | otherwise =
           if consistent gold tagg
           then zeroStats {tp = 1}
-          else zeroStats {fp = 1, fn = 1}
+          else zeroStats {fp = 1, fn = 1, ce = 1}
 
     consistent xs ys
       | weakAcc cfg = (not . S.null) (S.intersection xs ys)
@@ -196,6 +204,14 @@ recall :: Stats -> Double
 recall Stats{..}
   = fromIntegral tp
   / fromIntegral (tp + fn)
+
+
+accuracy :: Stats -> Double
+accuracy Stats{..}
+  = fromIntegral (tp + tn)
+  / fromIntegral (tp + fp + tn + fn - ce)
+  -- Not that, above, we substract `ce` so as to count inconsistency errors
+  -- as single ones (their are accounted for twice in `fp + fn`).
 
 
 ------------------------------------------------------
