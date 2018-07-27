@@ -64,6 +64,8 @@ data AccCfg x = AccCfg
   , discardProb0 :: Bool
     -- ^ Whether sentences with near 0 probability should be discarded from
     -- evaluation.
+  , verbose :: Bool
+    -- ^ Print information about compared elements
   }
 
 
@@ -117,18 +119,23 @@ goodAndBad cfg dag1 dag2
     dag = DAG.zipE' dag1 dag2
     ambiDag = identifyAmbiguousSegments dag
 
+    traceThem gold tagg =
+      if verbose cfg
+      then trace
+           ( let info = (,) <$> orth <*> choice cfg in
+               "comparing '" ++
+               show (info <$> gold) ++
+               "' with '" ++
+               show (info <$> tagg) ++
+               "'"
+           )
+      else id
+
     gather edgeID (gold, tagg)
       | (onlyOov cfg `implies` isOov) &&
         (onlyAmb cfg `implies` isAmb) &&
         ((not . S.null) (onlyMarkedWith cfg) `implies` isMarked) =
-          trace
-            ( let info = (,) <$> orth <*> choice cfg in
-              "comparing '" ++
-              show (info <$> gold) ++
-              "' with '" ++
-              show (info <$> tagg) ++
-              "'"
-            ) $
+          traceThem gold tagg $
           gather0
           (maybe S.empty (choice cfg) gold)
           (maybe S.empty (choice cfg) tagg)
