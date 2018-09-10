@@ -12,11 +12,17 @@ module NLP.Concraft.DAG.Segmentation
 -- * Frequencies
 , computeFreqs
 , FreqConf (..)
+
+-- * Ambiguity-related stats
+, computeAmbiStats
+, AmbiCfg (..)
+, AmbiStats (..)
 ) where
 
 
 import           Control.Monad (guard)
 -- import qualified Control.Monad.State.Strict as State
+import qualified Data.Foldable as F
 
 import qualified Data.MemoCombinators as Memo
 import qualified Data.Set as S
@@ -27,6 +33,8 @@ import           Data.Ord (comparing)
 
 import           Data.DAG (DAG)
 import qualified Data.DAG as DAG
+
+-- import qualified Data.Tagset.Positional as P
 
 import qualified NLP.Concraft.DAG.Morphosyntax as X
 import qualified NLP.Concraft.DAG.Morphosyntax.Ambiguous as Ambi
@@ -253,3 +261,74 @@ edgeOrth = T.toLower . T.strip . X.orth
 -- assigned to each segment, and we need to find the path with the lowest
 -- weigth.
 ------------------------------------
+
+
+------------------------------------
+-- Ambiguity stats
+------------------------------------
+
+
+-- | Numbers of tokens.
+data AmbiCfg = AmbiCfg
+  { onlyChosen :: Bool
+    -- ^ Only take the chosen tokens into account
+  } deriving (Show, Eq, Ord)
+
+
+-- | Numbers of tokens.
+data AmbiStats = AmbiStats
+  { ambi :: !Int
+    -- ^ Ambiguous tokens
+  , total :: !Int
+    -- ^ All tokens
+  } deriving (Show, Eq, Ord)
+
+
+-- | Initial statistics.
+zeroAmbiStats :: AmbiStats
+zeroAmbiStats = AmbiStats 0 0
+
+
+addAmbiStats :: AmbiStats -> AmbiStats -> AmbiStats
+addAmbiStats x y = AmbiStats
+  { ambi = ambi x + ambi y
+  , total = total x + total y
+  }
+
+
+-- | Compute:
+-- * the number of tokens participating in ambiguities
+-- * the total number of tokens
+computeAmbiStats
+  :: (X.Word w)
+  => AmbiCfg
+  -> [X.Sent w t]
+  -> AmbiStats
+computeAmbiStats cfg sents =
+  F.foldl' addAmbiStats zeroAmbiStats
+  [ ambiStats cfg sent
+  | sent <- sents ]
+
+
+ambiStats
+  :: (X.Word w)
+  => AmbiCfg
+  -> X.Sent w t
+  -> AmbiStats
+ambiStats AmbiCfg{..} dag
+  = F.foldl' addAmbiStats zeroAmbiStats
+  . DAG.mapE gather
+  $ DAG.zipE dag ambiDag
+  where
+    ambiDag = Ambi.identifyAmbiguousSegments dag
+    gather edgeID (seg, isAmbi)
+      | isAmbi && prob >= eps =
+          AmbiStats {ambi = 1, total = 1}
+      | prob >= eps =
+          AmbiStats {ambi = 0, total = 1}
+      | otherwise =
+          AmbiStats {ambi = 0, total = 0}
+      where
+        isChosen = (prob >= eps) || (not onlyChosen)
+        prob = sum . M.elems . X.unWMap $ X.tags seg
+        eps = 0.5
