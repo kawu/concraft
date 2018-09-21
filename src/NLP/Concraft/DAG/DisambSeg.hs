@@ -39,18 +39,18 @@ module NLP.Concraft.DAG.DisambSeg
 
 import Prelude hiding (words)
 import Control.Applicative ((<$>), (<*>), pure)
-import Data.Binary (Binary, put, get, Put, Get)
+import Data.Binary (put, get, Put, Get)
 import Data.Text.Binary ()
-import System.Console.CmdArgs
+-- import System.Console.CmdArgs
 import qualified Data.Set as S
 import qualified Data.Map as M
-import qualified Data.Vector as V
-import qualified Data.List as List
+-- import qualified Data.Vector as V
+-- import qualified Data.List as List
 
 import qualified Data.DAG as DAG
 import           Data.DAG (DAG)
 
-import qualified Control.Monad.Ox as Ox
+-- import qualified Control.Monad.Ox as Ox
 import qualified Numeric.SGD.Momentum as SGD
 import qualified Data.CRF.Chain2.Tiers.DAG as CRF
 import qualified Data.Tagset.Positional as T
@@ -240,11 +240,11 @@ schemed
   -> (Tag -> [a])
   -> [X.Sent w t]
   -> [CRF.SentL Ob a]
-schemed simpl schema split =
+schemed simpl schema splitIt =
     map onSent
   where
     onSent sent =
-        let xs = fmap (X.mapSeg split) (X.mapSent simpl sent)
+        let xs = fmap (X.mapSeg splitIt) (X.mapSent simpl sent)
             mkProb = CRF.mkProb . M.toList . X.unWMap . X.tags
         -- in  fmap (uncurry CRF.mkWordL) $
         in  DAG.zipE (schematize schema xs) (fmap mkProb xs)

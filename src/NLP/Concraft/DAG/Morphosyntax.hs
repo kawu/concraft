@@ -31,15 +31,15 @@ module NLP.Concraft.DAG.Morphosyntax
 
 import           Prelude hiding (Word)
 import           Control.Applicative ((<$>), (<*>))
-import           Control.Arrow (first)
+-- import           Control.Arrow (first)
 import           Data.Aeson
-import           Data.Binary (Binary)
+-- import           Data.Binary (Binary)
 import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
 
-import qualified Data.DAG as DAG
+-- import qualified Data.DAG as DAG
 import           Data.DAG (DAG)
 -- import qualified Data.CRF.Chain1.Constrained.DAG.Dataset.Internal as DAG
 -- import           Data.CRF.Chain1.Constrained.DAG.Dataset.Internal (DAG)

@@ -35,7 +35,7 @@ import qualified Codec.Compression.GZip as GZip
 
 import           NLP.Concraft.Morphosyntax
 import           NLP.Concraft.Analysis
-import           NLP.Concraft.Format.Temp
+-- import           NLP.Concraft.Format.Temp
 import qualified Data.Tagset.Positional as P
 import qualified NLP.Concraft.Guess as G
 import qualified NLP.Concraft.Disamb as D
@@ -230,10 +230,10 @@ withTemp
     -> IO a
 withTemp _      _   _    [] handler = handler (return [])
 withTemp tagset dir tmpl xs handler =
-  Temp.withTempFile dir tmpl $ \tmpPath tmpHandle -> do
+  Temp.withTempFile dir tmpl $ \_tmpPath tmpHandle -> do
     hClose tmpHandle
-    let txtSent = mapSent $ P.showTag tagset
-        tagSent = mapSent $ P.parseTag tagset
+    let _txtSent = mapSent $ P.showTag tagset
+        _tagSent = mapSent $ P.parseTag tagset
     -- writePar tmpPath $ map txtSent xs
     -- handler (map tagSent <$> readPar tmpPath)
     handler (return xs)

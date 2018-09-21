@@ -42,17 +42,17 @@ module NLP.Concraft.DAG2
 
 import           System.IO (hClose)
 import           Control.Applicative ((<$>), (<*>)) -- , (<|>))
-import           Control.Arrow (first)
+-- import           Control.Arrow (first)
 import           Control.Monad (when, guard)
 -- import           Data.Maybe (listToMaybe)
-import qualified Data.Foldable as F
-import qualified Data.Set as S
+-- import qualified Data.Foldable as F
+-- import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import           Data.Binary (Binary, put, get, Put, Get)
-import qualified Data.Binary as Binary
+-- import qualified Data.Binary as Binary
 import           Data.Binary.Put (runPut)
 import           Data.Binary.Get (runGet)
-import           Data.Aeson
+-- import           Data.Aeson
 import qualified System.IO.Temp as Temp
 import qualified Data.ByteString.Lazy as BL
 import qualified Codec.Compression.GZip as GZip
@@ -63,9 +63,9 @@ import qualified Data.DAG as DAG
 import qualified Data.Tagset.Positional as P
 
 -- import           NLP.Concraft.Analysis
-import           NLP.Concraft.Format.Temp
+-- import           NLP.Concraft.Format.Temp
 import qualified NLP.Concraft.DAG.Morphosyntax as X
-import           NLP.Concraft.DAG.Morphosyntax (Sent, WMap)
+import           NLP.Concraft.DAG.Morphosyntax (Sent)
 import qualified NLP.Concraft.DAG.Guess as G
 import qualified NLP.Concraft.DAG.Disamb as D
 
@@ -182,16 +182,16 @@ findOptimalPaths dag = do
   where
     doit i = inside i ++ final i
     inside i = do
-      (tag, weight) <- M.toList (DAG.edgeLabel i dag)
+      (tagx, weight) <- M.toList (DAG.edgeLabel i dag)
       guard $ weight >= 1.0 - eps
       j <- DAG.nextEdges i dag
       xs <- doit j
-      return $ (i, tag) : xs
+      return $ (i, tagx) : xs
     final i = do
       guard $ DAG.isFinalEdge i dag
-      (tag, weight) <- M.toList (DAG.edgeLabel i dag)
+      (tagx, weight) <- M.toList (DAG.edgeLabel i dag)
       guard $ weight >= 1.0 - eps
-      return [(i, tag)]
+      return [(i, tagx)]
     eps = 1.0e-9
 
 
@@ -315,9 +315,9 @@ train tagset guessNum guessConf disambConf trainR'IO evalR'IO = do
 
   putStrLn "\n===== Train guessing model ====="
   guesser <- G.train guessConf trainR'IO evalR'IO
-  let guess = guessSent guessNum guesser
-  trainG  <- map guess <$> trainR'IO
-  evalG   <- map guess <$> evalR'IO
+  let doGuess = guessSent guessNum guesser
+  trainG  <- map doGuess <$> trainR'IO
+  evalG   <- map doGuess <$> evalR'IO
 
   temp "train" trainG $ \trainG'IO -> do
   temp "eval"  evalG  $ \evalG'IO  -> do
@@ -349,10 +349,10 @@ withTemp
   -> IO a
 withTemp _      _   _    [] handler = handler (return [])
 withTemp tagset dir tmpl xs handler =
-  Temp.withTempFile dir tmpl $ \tmpPath tmpHandle -> do
+  Temp.withTempFile dir tmpl $ \_tmpPath tmpHandle -> do
     hClose tmpHandle
-    let txtSent = X.mapSent $ P.showTag tagset
-        tagSent = X.mapSent $ P.parseTag tagset
+    let _txtSent = X.mapSent $ P.showTag tagset
+        _tagSent = X.mapSent $ P.parseTag tagset
     handler (return xs)
 
 

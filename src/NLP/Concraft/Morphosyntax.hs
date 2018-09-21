@@ -31,9 +31,9 @@ module NLP.Concraft.Morphosyntax
 
 import           Prelude hiding (Word)
 import           Control.Applicative ((<$>), (<*>))
-import           Control.Arrow (first)
+-- import           Control.Arrow (first)
 import           Data.Aeson
-import           Data.Binary (Binary)
+-- import           Data.Binary (Binary)
 import qualified Data.Set as S
 import qualified Data.Map as M
 import qualified Data.Text as T

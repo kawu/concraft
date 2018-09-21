@@ -321,7 +321,7 @@ ambiStats AmbiCfg{..} dag
   $ DAG.zipE dag ambiDag
   where
     ambiDag = Ambi.identifyAmbiguousSegments dag
-    gather edgeID (seg, isAmbi)
+    gather _edgeID (seg, isAmbi)
       | isAmbi && prob >= eps =
           AmbiStats {ambi = 1, total = 1}
       | prob >= eps =
@@ -329,6 +329,6 @@ ambiStats AmbiCfg{..} dag
       | otherwise =
           AmbiStats {ambi = 0, total = 0}
       where
-        isChosen = (prob >= eps) || (not onlyChosen)
+        -- isChosen = (prob >= eps) || (not onlyChosen)
         prob = sum . M.elems . X.unWMap $ X.tags seg
         eps = 0.5

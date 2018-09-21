@@ -37,13 +37,13 @@ module NLP.Concraft.DAG.Disamb
 
 import Prelude hiding (words)
 import Control.Applicative ((<$>), (<*>), pure)
-import Data.Binary (Binary, put, get, Put, Get)
+import Data.Binary (put, get, Put, Get)
 import Data.Text.Binary ()
-import System.Console.CmdArgs
+-- import System.Console.CmdArgs
 import qualified Data.Set as S
 import qualified Data.Map as M
-import qualified Data.Vector as V
-import qualified Data.List as List
+-- import qualified Data.Vector as V
+-- import qualified Data.List as List
 
 import qualified Data.DAG as DAG
 import           Data.DAG (DAG)

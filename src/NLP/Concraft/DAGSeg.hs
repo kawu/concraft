@@ -40,20 +40,20 @@ module NLP.Concraft.DAGSeg
 
 
 -- import           Prelude hiding (Word)
-import           System.IO (hClose)
+-- import           System.IO (hClose)
 import           Control.Applicative ((<$>), (<*>)) -- , (<|>))
-import           Control.Arrow (first, second)
+import           Control.Arrow (second)
 import           Control.Monad (when, guard)
 -- import           Data.Maybe (listToMaybe)
-import qualified Data.Foldable as F
+-- import qualified Data.Foldable as F
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import           Data.Binary (Binary, put, get, Put, Get)
-import qualified Data.Binary as Binary
+-- import qualified Data.Binary as Binary
 import           Data.Binary.Put (runPut)
 import           Data.Binary.Get (runGet)
-import           Data.Aeson
-import qualified System.IO.Temp as Temp
+-- import           Data.Aeson
+-- import qualified System.IO.Temp as Temp
 import qualified Data.ByteString.Lazy as BL
 import qualified Codec.Compression.GZip as GZip
 import           Data.Ord (comparing)
@@ -65,9 +65,9 @@ import qualified Data.DAG as DAG
 import qualified Data.Tagset.Positional as P
 
 -- import           NLP.Concraft.Analysis
-import           NLP.Concraft.Format.Temp
+-- import           NLP.Concraft.Format.Temp
 import qualified NLP.Concraft.DAG.Morphosyntax as X
-import           NLP.Concraft.DAG.Morphosyntax (Sent, WMap)
+import           NLP.Concraft.DAG.Morphosyntax (Sent)
 import qualified NLP.Concraft.DAG.Guess as G
 import qualified NLP.Concraft.DAG.DisambSeg as D
 
@@ -223,8 +223,8 @@ findOptimalPaths dag = do
     doit i = inside i ++ final i
     inside i = do
       let tags =
-            [ tag
-            | (tag, weight) <- M.toList (DAG.edgeLabel i dag)
+            [ tak
+            | (tak, weight) <- M.toList (DAG.edgeLabel i dag)
             , weight >= 1.0 - eps ]
       guard . not $ null tags
       j <- DAG.nextEdges i dag
@@ -233,8 +233,8 @@ findOptimalPaths dag = do
     final i = do
       guard $ DAG.isFinalEdge i dag
       let tags =
-            [ tag
-            | (tag, weight) <- M.toList (DAG.edgeLabel i dag)
+            [ tak
+            | (tak, weight) <- M.toList (DAG.edgeLabel i dag)
             , weight >= 1.0 - eps ]
       guard . not $ null tags
       return [(i, S.fromList tags)]

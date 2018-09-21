@@ -356,14 +356,14 @@ onEdgeWith :: DAG x a -> (a -> b) -> EdgeID -> Maybe b
 onEdgeWith dag f k = f <$> DAG.maybeEdgeLabel k dag
 
 
--- | Value of the given function with respect to the given sentence and its
--- edge. Return `[]` if the edge is out of bounds.
-onEdgeWith' :: DAG x a -> (a -> [b]) -> EdgeID -> [b]
-onEdgeWith' dag f k =
-  g $ f <$> DAG.maybeEdgeLabel k dag
-  where
-    g Nothing = []
-    g (Just xs) = xs
+-- -- | Value of the given function with respect to the given sentence and its
+-- -- edge. Return `[]` if the edge is out of bounds.
+-- onEdgeWith' :: DAG x a -> (a -> [b]) -> EdgeID -> [b]
+-- onEdgeWith' dag f k =
+--   g $ f <$> DAG.maybeEdgeLabel k dag
+--   where
+--     g Nothing = []
+--     g (Just xs) = xs
 
 
 -- | Move the specified number of edges forward or backward. This implementation
@@ -388,6 +388,6 @@ shift k i dag
       shift (k + 1) j dag
   | otherwise = return i
   where
-    mayHead (x:xs) = Just x
+    mayHead (x:_) = Just x
     mayHead [] = Nothing
     mayTail = mayHead . reverse
