@@ -131,17 +131,27 @@ schematize schema sent =
 
 
 -- | Determine the marginal probabilities of the individual labels in the sentence.
-marginals :: (X.Word w, Ord t, Ord s) => Guesser t s -> X.Sent w t -> DAG () (X.WMap t)
-marginals gsr = fmap X.tags . marginalsSent gsr
+marginals
+  :: (X.Word w, Ord t, Ord s)
+  => CRF.Config s
+  -> Guesser t s
+  -> X.Sent w t
+  -> DAG () (X.WMap t)
+marginals cfg gsr = fmap X.tags . marginalsSent cfg gsr
 
 
 -- | Replace the probabilities of the sentence labels with the marginal probabilities
 -- stemming from the model.
-marginalsSent :: (X.Word w, Ord t, Ord s) => Guesser t s -> X.Sent w t -> X.Sent w t
-marginalsSent gsr sent
+marginalsSent
+  :: (X.Word w, Ord t, Ord s)
+  => CRF.Config s
+  -> Guesser t s
+  -> X.Sent w t
+  -> X.Sent w t
+marginalsSent cfg gsr sent
   = (\new -> inject gsr new sent)
   . fmap tags
-  . marginalsCRF gsr
+  . marginalsCRF cfg gsr
   $ sent
   where
     tags = X.mkWMap . M.toList . considerZero . choice
@@ -157,11 +167,16 @@ marginalsSent gsr sent
 
 
 -- | Ascertain the marginal probabilities of to individual labels in the sentence.
-marginalsCRF :: (X.Word w, Ord t, Ord s) => Guesser t s -> X.Sent w t -> CRF.SentL Ob s
-marginalsCRF gsr dag0 =
+marginalsCRF
+  :: (X.Word w, Ord t, Ord s)
+  => CRF.Config s
+  -> Guesser t s
+  -> X.Sent w t
+  -> CRF.SentL Ob s
+marginalsCRF cfg gsr dag0 =
   let schema = fromConf (schemaConf gsr)
       dag = X.mapSent (simplify gsr) dag0
-  in  CRF.marginals (crf gsr) (schematize schema dag)
+  in  CRF.marginals cfg (crf gsr) (schematize schema dag)
 
 
 -- -- | Replace the probabilities of the sentence labels with the new probabilities

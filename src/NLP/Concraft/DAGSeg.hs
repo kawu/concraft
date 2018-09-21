@@ -64,6 +64,8 @@ import qualified Data.DAG as DAG
 
 import qualified Data.Tagset.Positional as P
 
+import qualified Data.CRF.Chain1.Constrained.DAG as CRF
+
 -- import           NLP.Concraft.Analysis
 -- import           NLP.Concraft.Format.Temp
 import qualified NLP.Concraft.DAG.Morphosyntax as X
@@ -274,8 +276,13 @@ disambPath path =
 
 -- | Determine marginal probabilities corresponding to individual
 -- tags w.r.t. the guessing model.
-guessMarginals :: (X.Word w, Ord t) => G.Guesser t P.Tag -> Sent w t -> Anno t Double
-guessMarginals gsr = fmap X.unWMap . G.marginals gsr
+guessMarginals
+  :: (X.Word w, Ord t)
+  => CRF.Config P.Tag
+  -> G.Guesser t P.Tag
+  -> Sent w t
+  -> Anno t Double
+guessMarginals cfg gsr = fmap X.unWMap . G.marginals cfg gsr
 
 
 -- | Determine marginal probabilities corresponding to individual
@@ -330,21 +337,40 @@ trimMap k
 -- most probably labels for each OOV edge. Note that, for OOV words, the entire
 -- set of default tags is considered.
 --
-guessSent :: (X.Word w, Ord t) => Int -> G.Guesser t P.Tag -> Sent w t -> Sent w t
-guessSent k gsr sent = insertGuessed (fmap (trimMap k) (guessMarginals gsr sent)) sent
--- guessSent k gsr sent = trimOOV k $ replace (guessMarginals gsr sent) sent
+guessSent ::
+     (X.Word w, Ord t)
+  => Int
+  -> CRF.Config P.Tag
+  -> G.Guesser t P.Tag
+  -> Sent w t
+  -> Sent w t
+guessSent k cfg gsr sent =
+  insertGuessed (fmap (trimMap k) (guessMarginals cfg gsr sent)) sent
 
 
 -- | Perform guessing, trimming, and finally determine marginal probabilities
 -- corresponding to individual tags w.r.t. the guessing model.
-guess :: (X.Word w, Ord t) => Int -> G.Guesser t P.Tag -> Sent w t -> Anno t Double
-guess k gsr sent = extract . trimOOV k $ replace (guessMarginals gsr sent) sent
+guess ::
+     (X.Word w, Ord t)
+  => Int
+  -> CRF.Config P.Tag
+  -> G.Guesser t P.Tag
+  -> Sent w t
+  -> Anno t Double
+guess k cfg gsr sent =
+  extract . trimOOV k $ replace (guessMarginals cfg gsr sent) sent
 
 
 -- | Perform guessing, trimming, and finally determine marginal probabilities
 -- corresponding to individual tags w.r.t. the disambiguation model.
-tag :: (X.Word w, Ord t) => Int -> Concraft t -> Sent w t -> Anno t Double
-tag k crf = disambMarginals (disamb crf) . guessSent k (guesser crf)
+tag ::
+     (X.Word w, Ord t)
+  => Int
+  -> CRF.Config P.Tag
+  -> Concraft t
+  -> Sent w t
+  -> Anno t Double
+tag k cfg crf = disambMarginals (disamb crf) . guessSent k cfg (guesser crf)
 
 
 ---------------------
