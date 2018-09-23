@@ -1,5 +1,5 @@
 name:               concraft
-version:            0.12.0
+version:            0.12.1
 synopsis:           Morphological disambiguation based on constrained CRFs
 description:
     A morphological disambiguation library based on
@@ -7,7 +7,7 @@ description:
 license:            BSD3
 license-file:       LICENSE
 cabal-version:      >= 1.6
-copyright:          Copyright (c) 2011-2018 Jakub Waszczuk, 2012 IPI PAN
+copyright:          Copyright (c) 2011-2018 Jakub Waszczuk, IPI PAN
 author:             Jakub Waszczuk
 maintainer:         waszczuk.kuba@gmail.com
 stability:          experimental
