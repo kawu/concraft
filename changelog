@@ -1,0 +1,4 @@
+-*-change-log-*-
+
+0.12.0	Sep 2018
+	* Add support for a tag blacklist (guessing)

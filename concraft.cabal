@@ -15,6 +15,8 @@ category:           Natural Language Processing
 homepage:           http://zil.ipipan.waw.pl/Concraft
 build-type:         Simple
 
+extra-source-files: changelog
+
 Flag buildAnaTool
     Description: Build model analysis tool
     Default:     False
