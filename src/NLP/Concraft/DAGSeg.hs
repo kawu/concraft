@@ -108,18 +108,20 @@ getModel
   :: (Ord t, Binary t)
   => (P.Tagset -> t -> P.Tag)
      -- ^ Guesser simplification function
+  -> (P.Tagset -> P.Tag -> t)
+     -- ^ Guesser complexification function
   -> (P.Tagset -> t -> D.Tag)
      -- ^ Segmentation/disamb simplification function (TODO: two different
      -- simplification functions?)
   -> Get (Concraft t)
-getModel gsrSmp dmbSmp = do
+getModel gsrSmp gsrCpx dmbSmp = do
   comp <- get
   when (comp /= modelVersion) $ error $
     "Incompatible model version: " ++ comp ++
     ", expected: " ++ modelVersion
   tagset <- get
   Concraft tagset <$> get
-    <*> G.getGuesser (gsrSmp tagset)
+    <*> G.getGuesser (gsrSmp tagset) (gsrCpx tagset)
     <*> D.getDisamb (dmbSmp tagset)
     <*> D.getDisamb (dmbSmp tagset)
 
@@ -135,13 +137,15 @@ loadModel
   :: (Ord t, Binary t)
   => (P.Tagset -> t -> P.Tag)
      -- ^ Guesser simplification function
+  -> (P.Tagset -> P.Tag -> t)
+     -- ^ Guesser complexification function
   -> (P.Tagset -> t -> D.Tag)
      -- ^ Disamb simplification function
   -> FilePath
   -> IO (Concraft t)
-loadModel gsrSmp dmbSmp path = do
+loadModel gsrSmp gsrCpx dmbSmp path = do
     -- x <- Binary.decode . GZip.decompress <$> BL.readFile path
-    x <- runGet (getModel gsrSmp dmbSmp) . GZip.decompress <$> BL.readFile path
+    x <- runGet (getModel gsrSmp gsrCpx dmbSmp) . GZip.decompress <$> BL.readFile path
     x `seq` return x
 
 

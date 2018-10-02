@@ -64,6 +64,13 @@ data Guesser t s = Guesser
       -- library)
     , simplify      :: t -> s
       -- ^ A tag simplification function
+    , complexify    :: s -> t
+      -- ^ NEW: instead of an `unkTagSet`, a function which makes a complex tag
+      -- out of a simple tag.
+      --
+      -- WARNING: we assume, that this function does not conflate simplified
+      -- tags, i.e., tag to tags of type `s` cannot lead to one and the same
+      -- complex tag of type `t`.
     }
 
 
@@ -87,9 +94,13 @@ putGuesser Guesser{..} = do
 
 -- | Get the disambiguation model, provided the simplification function.
 -- getGuesser :: (M.Map t T.Tag) -> Get (Guesser t)
-getGuesser :: (Binary t, Binary s, Ord s) => (t -> s) -> Get (Guesser t s)
-getGuesser smp =
-  Guesser <$> get <*> get <*> get <*> get <*> pure smp
+getGuesser ::
+     (Binary t, Binary s, Ord s, Ord t)
+  => (t -> s)
+  -> (s -> t)
+  -> Get (Guesser t s)
+getGuesser smp cpx =
+  Guesser <$> get <*> get <*> get <*> get <*> pure smp <*> pure cpx
 
 
 -- --------------------------
@@ -154,12 +165,13 @@ marginalsSent cfg gsr sent
   . marginalsCRF cfg gsr
   $ sent
   where
-    tags = X.mkWMap . M.toList . considerZero . choice
+    tags = X.fromMap . considerZero . choice
     -- we mix the chosen and the potential interpretations together
     choice w = M.unionWith (+)
       (CRF.unProb . CRF.choice $ w)
-      (M.fromList . map (,0) . interps $ w)
-    interps = S.toList . CRF.lbs . CRF.word
+      -- (M.fromList . map (,0) . interps $ w)
+      (M.fromSet (const 0) . interps $ w)
+    interps = CRF.lbs . CRF.word
     -- if empty, we choose the zero probability label.
     considerZero m
       | M.null m = M.singleton (zeroProbLab gsr) 0
@@ -201,12 +213,16 @@ inject
   -> X.Sent w t
   -> X.Sent w t
 inject gsr newSent srcSent =
-  let doit (target, src) =
-        let oldTags = if X.oov (X.word src)
-                      then X.mkWMap . map (,0) . S.toList . unkTagSet $ gsr
-                      else X.tags src
-            newTags = injectWMap gsr target oldTags
-        in  src {X.tags = newTags}
+  let doit (target, src)
+        | X.oov (X.word src) =
+            let newTags = X.fromMap $ M.fromAscList
+                  [ (complexify gsr tag, prob) 
+                  | (tag, prob) <- M.toAscList (X.unWMap target) ]
+            in  src {X.tags = newTags}
+        | otherwise =
+            let oldTags = X.tags src
+                newTags = injectWMap gsr target oldTags
+            in  src {X.tags = newTags}
   in  fmap doit (DAG.zipE newSent srcSent)
 
 
@@ -234,6 +250,9 @@ injectWMap gsr newSpl src = X.mkWMap
     , maybe 0 id $
       M.lookup (simplify gsr tag) (X.unWMap newSpl) )
   | (tag, _) <- M.toList (X.unWMap src) ]
+-- injectWMap gsr newSpl src = X.fromMap $ M.fromAscList
+--   [ (complexify gsr smp, prob)
+--   | (smp, prob) <- M.toAscList (X.unWMap newSpl) ]
 
 
 -- --------------------------
@@ -302,8 +321,11 @@ data TrainConf t s = TrainConf
     , zeroProbLabel :: t
     -- | Label simplification function
     , simplifyLabel :: t -> s
-    -- | Strip the label from irrelevant information.  Used to determine othe set of
-    -- possible tags for unknown words.
+    -- | Label complexification function
+    , complexifyLabel :: s -> t
+    -- | Strip the label from irrelevant information.  Used to determine the
+    -- set of possible tags for unknown words.
+    -- TODO: we don't need this with `complexify` anymore!?
     , stripLabel :: t -> t
     -- | Guess only visible features
     , onlyVisible :: Bool
@@ -337,7 +359,14 @@ train TrainConf{..} trainData evalData = do
     mkR0 featExtract
     (schemed simplifyLabel schema <$> trainData)
     (schemed simplifyLabel schema <$> evalData)
-  return $ Guesser schemaConfT crf (simplifyLabel zeroProbLabel) tagSet simplifyLabel
+  return $
+    Guesser
+      schemaConfT
+      crf
+      (simplifyLabel zeroProbLabel)
+      tagSet
+      simplifyLabel
+      complexifyLabel
 
 
 -- | Schematized dataset.
@@ -365,3 +394,8 @@ tagSetIn strip dag = S.fromList
   | edgeID <- DAG.dagEdges dag
   , let edge = DAG.edgeLabel edgeID dag
   , tag <- M.keys . X.unWMap . X.tags $ edge ]
+
+
+-- | Compute the default `X.WMap` for unknown tags.
+compUnkWMap :: Ord t => S.Set t -> X.WMap t
+compUnkWMap = X.mkWMap . map (,0) . S.toList
