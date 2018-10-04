@@ -62,6 +62,7 @@ data Guesser t s = Guesser
       -- ^ The tagset considered for the unknown words (TODO: a solution
       -- parallel and not 100% consistent with what is implemented in the CRF
       -- library)
+      -- TODO: with `complexify`, `unkTagSet` is not needed anymore!
     , simplify      :: t -> s
       -- ^ A tag simplification function
     , complexify    :: s -> t
