@@ -19,6 +19,10 @@ module NLP.Concraft.DAG.DisambSeg
 , P.Tier (..)
 , P.Atom (..)
 
+
+-- * Disambiguation
+, disamb
+
 -- -- * Marginals
 -- , marginalsSent
 -- , marginals
@@ -39,11 +43,13 @@ module NLP.Concraft.DAG.DisambSeg
 
 import Prelude hiding (words)
 import Control.Applicative ((<$>), (<*>), pure)
+import Control.Monad (guard)
 import Data.Binary (put, get, Put, Get)
+import Data.Maybe (maybeToList)
 import Data.Text.Binary ()
 -- import System.Console.CmdArgs
 import qualified Data.Set as S
-import qualified Data.Map as M
+import qualified Data.Map.Strict as M
 -- import qualified Data.Vector as V
 -- import qualified Data.List as List
 
@@ -111,8 +117,8 @@ getDisamb smp =
 --------------------------
 
 
--- | Replace the probabilities of the sentence labels with the new probabilities
--- stemming from the CRF sentence.
+-- | Replace the probabilities of the sentence labels with the new
+-- probabilities stemming from the CRF sentence.
 inject
   :: (Ord t, X.Word w)
   => Disamb t
@@ -152,7 +158,6 @@ probs probTyp dmb = fmap X.tags . probsSent probTyp dmb
 
 
 -- | Determine the marginal probabilities of to individual labels in the sentence.
--- marginalsSent :: (X.Word w, Ord t) => Disamb t -> X.Sent w t -> DAG () (X.WMap [P.Atom])
 probsSent :: (X.Word w, Ord t) => CRF.ProbType -> Disamb t -> X.Sent w t -> X.Sent w t
 probsSent probTyp dmb sent
   = (\new -> inject dmb new sent)
@@ -160,20 +165,66 @@ probsSent probTyp dmb sent
   . probsCRF probTyp dmb
   $ sent
   where
-    getTags = X.mkWMap . M.toList . choice -- CRF.unProb . snd
+    -- getTags = X.mkWMap . M.toList . choice
+    getTags = X.fromMap . choice
     -- below we mix the chosen and the potential interpretations together
     choice w = M.unionWith (+)
       (CRF.unProb . snd $ w)
-      (M.fromList . map (,0) . interps $ w)
-    interps = S.toList . CRF.lbs . fst
+      -- (M.fromList . map (,0) . interps $ w)
+      (M.fromSet (const 0) . interps $ w)
+    -- interps = S.toList . CRF.lbs . fst
+    interps = CRF.lbs . fst
 
 
-
-
--- | Ascertain the marginal probabilities of the individual labels in the sentence.
-probsCRF :: (X.Word w, Ord t) => CRF.ProbType -> Disamb t -> X.Sent w t -> CRF.SentL Ob P.Atom
+-- | Determine the marginal probabilities of the individual labels in the sentence.
+probsCRF ::
+     (X.Word w, Ord t)
+  => CRF.ProbType
+  -> Disamb t
+  -> X.Sent w t
+  -> CRF.SentL Ob P.Atom
 probsCRF probTyp dmb
   = CRF.probs probTyp (crf dmb)
+  . schematize schema
+  . X.mapSent (split (tiers dmb) . simplify dmb)
+  where
+    schema = fromConf (schemaConf dmb)
+
+
+--------------------------
+-- Disambiguation
+--------------------------
+
+
+-- -- | Perform disambiguation.
+-- disamb :: (X.Word w, Ord t) => Disamb t -> X.Sent w t -> DAG () (X.WMap t)
+-- disamb probTyp dmb = fmap X.tags . probsSent probTyp dmb
+
+
+-- | Perform disambiguation.
+disamb :: (X.Word w, Ord t) => Disamb t -> X.Sent w t -> DAG () (M.Map t Bool)
+disamb dmb srcSent
+  = injectDmb
+  . disambCRF dmb
+  $ srcSent
+  where
+    injectDmb newSent =
+      let doit (target, src) = M.fromList $ do
+            tag <- X.interps src
+            let tag' = split (tiers dmb) (simplify dmb tag)
+                isDmb = Just tag' == target
+            return (tag, isDmb)
+      in  fmap doit (DAG.zipE newSent srcSent)
+
+
+-- | Perform disambiguation (CRF level).
+disambCRF ::
+     (X.Word w, Ord t)
+  => Disamb t
+  -> X.Sent w t
+  -> DAG () (Maybe [P.Atom])
+disambCRF dmb
+  = CRF.tag (crf dmb)
   . schematize schema
   . X.mapSent (split (tiers dmb) . simplify dmb)
   where

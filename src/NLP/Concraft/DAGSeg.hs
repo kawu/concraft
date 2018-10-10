@@ -15,7 +15,8 @@ module NLP.Concraft.DAGSeg
 -- * Annotation
 , Anno
 
--- * Best paths
+-- * Disambiguation / best paths
+, disamb
 , findOptimalPaths
 , disambPath
 
@@ -89,7 +90,7 @@ data Concraft t = Concraft
   , guessNum      :: Int
   , guesser       :: G.Guesser t P.Tag
   , segmenter     :: D.Disamb t
-  , disamb        :: D.Disamb t
+  , disamber        :: D.Disamb t
   }
 
 
@@ -100,7 +101,7 @@ putModel Concraft{..} = do
   put guessNum
   G.putGuesser guesser
   D.putDisamb segmenter
-  D.putDisamb disamb
+  D.putDisamb disamber
 
 
 -- | Get the model, given the tag simplification function for the disambigutation model.
@@ -190,31 +191,8 @@ extract = fmap $ X.unWMap . X.tags
 
 
 ----------------------
--- Best path
+-- Disambiguation
 ----------------------
-
-
--- -- | Find all optimal paths in the given annotation. Optimal paths are those
--- -- which go through tags with the assigned probability 1.
--- findOptimalPaths :: Anno t Double -> [[(EdgeID, t)]]
--- findOptimalPaths dag = do
---   edgeID <- DAG.dagEdges dag
---   guard $ DAG.isInitialEdge edgeID dag
---   doit edgeID
---   where
---     doit i = inside i ++ final i
---     inside i = do
---       (tag, weight) <- M.toList (DAG.edgeLabel i dag)
---       guard $ weight >= 1.0 - eps
---       j <- DAG.nextEdges i dag
---       xs <- doit j
---       return $ (i, tag) : xs
---     final i = do
---       guard $ DAG.isFinalEdge i dag
---       (tag, weight) <- M.toList (DAG.edgeLabel i dag)
---       guard $ weight >= 1.0 - eps
---       return [(i, tag)]
---     eps = 1.0e-9
 
 
 -- | Find all optimal paths in the given annotation. Optimal paths are those
@@ -247,19 +225,6 @@ findOptimalPaths dag = do
     eps = 1.0e-9
 
 
--- -- | Make the given path with disamb markers in the given annotation
--- -- and produce a new disamb annotation.
--- disambPath :: (Ord t) => [(EdgeID, t)] -> Anno t Double -> Anno t Bool
--- disambPath path =
---   DAG.mapE doit
---   where
---     pathMap = M.fromList path
---     doit edgeID m = M.fromList $ do
---       let onPath = M.lookup edgeID pathMap
---       x <- M.keys m
---       return (x, Just x == onPath)
-
-
 -- | Make the given path with disamb markers in the given annotation
 -- and produce a new disamb annotation.
 disambPath :: (Ord t) => [(EdgeID, S.Set t)] -> Anno t Double -> Anno t Bool
@@ -273,13 +238,19 @@ disambPath path =
       return (x, S.member x onPath)
 
 
+-- | Determine max probabilities corresponding to individual tags w.r.t. the
+-- disambiguation model.
+disamb :: (X.Word w, Ord t) => D.Disamb t -> Sent w t -> Anno t Bool
+disamb dmb = D.disamb dmb
+
+
 ----------------------
 -- Marginals and Probs
 ----------------------
 
 
--- | Determine marginal probabilities corresponding to individual
--- tags w.r.t. the guessing model.
+-- | Determine marginal probabilities corresponding to individual tags w.r.t.
+-- the guessing model.
 guessMarginals
   :: (X.Word w, Ord t)
   => CRF.Config P.Tag
@@ -289,15 +260,14 @@ guessMarginals
 guessMarginals cfg gsr = fmap X.unWMap . G.marginals cfg gsr
 
 
--- | Determine marginal probabilities corresponding to individual
--- tags w.r.t. the guessing model.
+-- | Determine marginal probabilities corresponding to individual tags w.r.t.
+-- the disambiguation model.
 disambMarginals :: (X.Word w, Ord t) => D.Disamb t -> Sent w t -> Anno t Double
--- disambMarginals dmb = fmap X.unWMap . D.marginals dmb
 disambMarginals = disambProbs D.Marginals
 
 
--- | Determine probabilities corresponding to individual
--- tags w.r.t. the guessing model.
+-- | Determine max probabilities corresponding to individual tags w.r.t. the
+-- disambiguation model.
 disambProbs :: (X.Word w, Ord t) => D.ProbType -> D.Disamb t -> Sent w t -> Anno t Double
 disambProbs typ dmb = fmap X.unWMap . D.probs typ dmb
 
@@ -374,7 +344,7 @@ tag ::
   -> Concraft t
   -> Sent w t
   -> Anno t Double
-tag k cfg crf = disambMarginals (disamb crf) . guessSent k cfg (guesser crf)
+tag k cfg crf = disambMarginals (disamber crf) . guessSent k cfg (guesser crf)
 
 
 ---------------------
@@ -462,5 +432,5 @@ tag k cfg crf = disambMarginals (disamb crf) . guessSent k cfg (guesser crf)
 -- (in log-domain) lower than the given threshold.
 prune :: Double -> Concraft t -> Concraft t
 prune x concraft =
-    let disamb' = D.prune x (disamb concraft)
-    in  concraft { disamb = disamb' }
+    let disamber' = D.prune x (disamber concraft)
+    in  concraft { disamber = disamber' }
