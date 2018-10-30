@@ -1,5 +1,5 @@
 name:               concraft
-version:            0.14.1
+version:            0.14.2
 synopsis:           Morphological disambiguation based on constrained CRFs
 description:
     A morphological disambiguation library based on
@@ -37,8 +37,8 @@ library
       , monad-ox                >= 0.3      && < 0.4
       , sgd                     >= 0.4.0    && < 0.5
       , tagset-positional       >= 0.3      && < 0.4
-      , crf-chain1-constrained  >= 0.5      && < 0.6
-      , crf-chain2-tiers        >= 0.5      && < 0.6
+      , crf-chain1-constrained  >= 0.6      && < 0.7
+      , crf-chain2-tiers        >= 0.6      && < 0.7
       , monad-codec             >= 0.2      && < 0.3
       , data-lens               >= 2.10     && < 2.12
       , transformers            >= 0.2      && < 0.6

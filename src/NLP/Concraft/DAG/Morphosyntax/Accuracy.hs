@@ -61,9 +61,9 @@ data AccCfg x = AccCfg
     -- ^ If weak, there has to be an overlap in the tags assigned to a given
     -- segment in both datasets. Otherwise, the two sets of tags have to be
     -- identical.
-  , discardProb0 :: Bool
-    -- ^ Whether sentences with near 0 probability should be discarded from
-    -- evaluation.
+--   , discardProb0 :: Bool
+--     -- ^ Whether sentences with near 0 probability should be discarded from
+--     -- evaluation.
   , verbose :: Bool
     -- ^ Print information about compared elements
   }
@@ -105,14 +105,14 @@ goodAndBad
   -> Sent w (P.Tag, x) -- ^ Gold (reference) DAG
   -> Sent w (P.Tag, x) -- ^ Tagged (to compare) DAG
   -> Stats
-goodAndBad cfg dag1 dag2
-  | discardProb0 cfg && (dagProb dag1 < eps || dagProb dag2 < eps) = zeroStats
-  | otherwise =
-    -- By using `DAG.zipE'`, we allow the DAGs to be slighly different in terms
-    -- of their edge sets.
-      F.foldl' addStats zeroStats
-      . DAG.mapE gather
-      $ dag
+goodAndBad cfg dag1 dag2 =
+--   | discardProb0 cfg && (dagProb dag1 < eps || dagProb dag2 < eps) = zeroStats
+--   | otherwise =
+  -- By using `DAG.zipE'`, we allow the DAGs to be slighly different in terms
+  -- of their edge sets.
+  F.foldl' addStats zeroStats
+  . DAG.mapE gather
+  $ dag
   where
     eps = 1e-9
 
@@ -226,24 +226,26 @@ accuracy Stats{..}
 ------------------------------------------------------
 
 
--- | Compute the probability of the DAG, based on the probabilities assigned to
--- different edges and their labels.
-dagProb :: Sent w t -> Double
-dagProb dag = sum
-  [ fromEdge edgeID
-  | edgeID <- DAG.dagEdges dag
-  , DAG.isInitialEdge edgeID dag ]
-  where
-    fromEdge edgeID
-      = edgeProb edgeID
-      * fromNode (DAG.endsWith edgeID dag)
-    edgeProb edgeID =
-      let Seg{..} = DAG.edgeLabel edgeID dag
-      in  sum . map snd . M.toList $ unWMap tags
-    fromNode nodeID =
-      case DAG.outgoingEdges nodeID dag of
-        [] -> 1
-        xs -> sum (map fromEdge xs)
+-- -- | Compute the probability of the DAG, based on the probabilities assigned to
+-- -- different edges and their labels.
+-- WARNING: the `dagProb` is most likely not correct, see the `crf-chain1-constrained`
+-- library for a correct version.
+-- dagProb :: Sent w t -> Double
+-- dagProb dag = sum
+--   [ fromEdge edgeID
+--   | edgeID <- DAG.dagEdges dag
+--   , DAG.isInitialEdge edgeID dag ]
+--   where
+--     fromEdge edgeID
+--       = edgeProb edgeID
+--       * fromNode (DAG.endsWith edgeID dag)
+--     edgeProb edgeID =
+--       let Seg{..} = DAG.edgeLabel edgeID dag
+--       in  sum . map snd . M.toList $ unWMap tags
+--     fromNode nodeID =
+--       case DAG.outgoingEdges nodeID dag of
+--         [] -> 1
+--         xs -> sum (map fromEdge xs)
 
 
 -- -- | Filter out the sentences with ~0 probability.
